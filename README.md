@@ -73,3 +73,4 @@ You should see the task request logged by the worker.
 - **Redis serves two roles** (Celery broker/backend + Django cache)
   rather than running a second cache service -- not worth the extra
   container at this scale.
+# sentinel-asm
