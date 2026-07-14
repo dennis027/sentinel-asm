@@ -144,4 +144,8 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_ROUTES = {}  # populated as scanning/reports tasks are added
+# DatabaseScheduler stores periodic task definitions in Postgres (via
+# django_celery_beat) rather than a static dict in this settings file --
+# means schedules are viewable/editable in /admin/ without a redeploy.
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
