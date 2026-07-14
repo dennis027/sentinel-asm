@@ -20,6 +20,11 @@ class RawFinding:
     turns this into a persisted Finding row -- the scanner itself never
     touches the database directly, which keeps plugins trivially
     testable (pure function in, list of RawFinding out).
+
+    asset_value is only used by organization-level scanners (e.g.
+    subfinder): it names the (possibly brand-new) Asset this finding
+    belongs to. Asset-level scanners leave it None -- the task layer
+    already knows the target asset from the ScanJob itself.
     """
 
     finding_type: str          # one of Finding.FindingType values
@@ -29,6 +34,7 @@ class RawFinding:
     title: str
     description: str = ""
     raw_data: dict[str, Any] = field(default_factory=dict)
+    asset_value: str | None = None
 
 
 class BaseScanner(ABC):
@@ -61,3 +67,5 @@ class BaseScanner(ABC):
         task layer can mark the ScanJob failed and retry.
         """
         raise NotImplementedError
+    
+
