@@ -7,3 +7,4 @@ celery==5.6.3
 redis==8.0.1
 gunicorn==23.0.0
 django-celery-beat==2.9.0
+drf-spectacular==0.30.0
