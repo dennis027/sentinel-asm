@@ -33,6 +33,7 @@ services:
   api:
     build:
       context: ./backend
+      dockerfile: Dockerfile.api
     container_name: asm-api
     restart: unless-stopped
     command: python manage.py runserver 0.0.0.0:8000
@@ -50,6 +51,7 @@ services:
   celery-worker:
     build:
       context: ./backend
+      dockerfile: Dockerfile.worker
     container_name: asm-celery-worker
     restart: unless-stopped
     # Single default queue for now. Once scanner plugins exist, split
@@ -68,6 +70,7 @@ services:
   celery-beat:
     build:
       context: ./backend
+      dockerfile: Dockerfile.api
     container_name: asm-celery-beat
     restart: unless-stopped
     command: celery -A config beat --loglevel=info

@@ -1,0 +1,20 @@
+# Worker image: same Python deps as the API, PLUS the scanner binaries
+# that plugins shell out to. Kept separate from Dockerfile.api so the
+# API image stays small and never carries tools it doesn't use.
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    nmap \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
