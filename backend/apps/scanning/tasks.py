@@ -7,13 +7,15 @@ into Finding rows. Adding a new scanner never touches this file.
 from celery import shared_task
 from django.utils import timezone
 
-from apps.assets.models import Asset
+from apps.assets.models import Asset, Technology
+
 from apps.findings.models import Finding
 
 from .models import ScanJob
 
 from apps.organizations.models import Organization
 from .plugins.registry import get_scanner, list_scanners
+
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30)
@@ -91,7 +93,17 @@ def run_scan_job(self, scan_job_id: str):
                 if (finding.asset_id, finding.dedupe_key) not in seen:
                     finding.is_active = False
                     finding.save(update_fields=["is_active"])
-
+        # Tech fingerprinting is a separate, optional side-channel from
+        # findings -- only applies to asset-level scanners that override
+        # extract_technologies() (currently just httpx).
+        if scanner.applies_to == "asset":
+            for raw_tech in scanner.extract_technologies(scan_job.asset):
+                Technology.objects.update_or_create(
+                    asset=scan_job.asset,
+                    name=raw_tech.name,
+                    version=raw_tech.version,
+                    defaults={"category": raw_tech.category},
+                )
         scan_job.status = ScanJob.Status.SUCCESS
         scan_job.finished_at = timezone.now()
         scan_job.save(update_fields=["status", "finished_at"])
