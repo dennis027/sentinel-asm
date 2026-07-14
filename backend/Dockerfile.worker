@@ -12,7 +12,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     nmap \
+    curl \
+    unzip \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# subfinder: prebuilt release binary (no Go toolchain needed in the image).
+# Pinned version -- bump deliberately, don't auto-track "latest" in a
+# build step.
+ARG SUBFINDER_VERSION=2.14.0
+RUN curl -sL -o /tmp/subfinder.zip \
+      "https://github.com/projectdiscovery/subfinder/releases/download/v${SUBFINDER_VERSION}/subfinder_${SUBFINDER_VERSION}_linux_amd64.zip" \
+    && unzip -q /tmp/subfinder.zip -d /usr/local/bin \
+    && chmod +x /usr/local/bin/subfinder \
+    && rm /tmp/subfinder.zip
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
