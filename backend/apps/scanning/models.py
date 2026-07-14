@@ -8,7 +8,31 @@ from apps.assets.models import Asset
 from apps.organizations.models import Organization
 
 
+class ScanJobManager(models.Manager):
+    def create(self, **kwargs):
+        if "idempotency_key" not in kwargs:
+            scanner_name = kwargs.get("scanner_name")
+            asset = kwargs.get("asset")
+            organization = kwargs.get("organization")
+            if scanner_name and (asset or organization):
+                if isinstance(asset, Asset):
+                    target = asset.value
+                elif asset is not None:
+                    target = str(asset)
+                else:
+                    target = organization.root_domain
+                kwargs["idempotency_key"] = ScanJob.build_idempotency_key(
+                    scanner_name, target
+                )
+
+        if "idempotency_key" not in kwargs:
+            return super().create(**kwargs)
+
+        return self.get_or_create(idempotency_key=kwargs["idempotency_key"], defaults=kwargs)[0]
+
+
 class ScanJob(models.Model):
+    objects = ScanJobManager()
     """
     One execution of one scanner plugin. Two kinds of target:
 
