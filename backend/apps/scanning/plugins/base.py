@@ -69,3 +69,14 @@ class BaseScanner(ABC):
         raise NotImplementedError
     
 
+@dataclass
+class RawTechnology:
+    """
+    A detected technology, handed back by scanners that implement
+    extract_technologies() (currently just httpx). Turned into a
+    Technology row by the task layer, same pattern as RawFinding.
+    """
+
+    name: str
+    version: str = ""
+    category: str = ""
