@@ -37,6 +37,19 @@ class RawFinding:
     asset_value: str | None = None
 
 
+@dataclass
+class RawTechnology:
+    """
+    A detected technology, handed back by scanners that implement
+    extract_technologies() (currently just httpx). Turned into a
+    Technology row by the task layer, same pattern as RawFinding.
+    """
+
+    name: str
+    version: str = ""
+    category: str = ""
+
+
 class BaseScanner(ABC):
     """
     Subclass this and set the three class attributes below.
@@ -68,15 +81,11 @@ class BaseScanner(ABC):
         """
         raise NotImplementedError
     
-
-@dataclass
-class RawTechnology:
-    """
-    A detected technology, handed back by scanners that implement
-    extract_technologies() (currently just httpx). Turned into a
-    Technology row by the task layer, same pattern as RawFinding.
-    """
-
-    name: str
-    version: str = ""
-    category: str = ""
+    def extract_technologies(self, target) -> list[RawTechnology]:
+        """
+        Optional. Override only in scanners that fingerprint tech stack
+        (currently httpx). Default: no technologies detected. Only
+        called by the task layer for applies_to == "asset" scanners.
+        """
+        return []
+    
