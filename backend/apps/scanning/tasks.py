@@ -11,7 +11,9 @@ from apps.assets.models import Asset
 from apps.findings.models import Finding
 
 from .models import ScanJob
-from .plugins.registry import get_scanner
+
+from apps.organizations.models import Organization
+from .plugins.registry import get_scanner, list_scanners
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30)
@@ -100,3 +102,59 @@ def run_scan_job(self, scan_job_id: str):
         scan_job.finished_at = timezone.now()
         scan_job.save(update_fields=["status", "error_message", "finished_at"])
         raise self.retry(exc=exc)
+    
+
+@shared_task
+def trigger_daily_scans():
+    """
+    Called once a day by celery-beat (see the periodic task set up by
+    `manage.py setup_periodic_tasks`). Fans out into one ScanJob per
+    (active organization/asset x registered scanner) combination,
+    scoped correctly by each scanner's applies_to.
+
+    Deliberately scanner-agnostic: iterates the plugin registry rather
+    than a hardcoded scanner list, so adding a new scanner plugin makes
+    it part of daily monitoring automatically -- no change needed here.
+
+    Idempotency (ScanJob.build_idempotency_key, same scanner + same
+    target + same day) means this is safe to call more than once on
+    the same day -- e.g. if beat double-fires -- without creating
+    duplicate scans.
+    """
+    org_level_scanners = []
+    asset_level_scanners = []
+    for scanner_name in list_scanners():
+        scanner_cls = get_scanner(scanner_name)
+        if scanner_cls.applies_to == "organization":
+            org_level_scanners.append(scanner_name)
+        else:
+            asset_level_scanners.append(scanner_name)
+
+    queued = 0
+
+    for org in Organization.objects.filter(is_active=True):
+        for scanner_name in org_level_scanners:
+            queued += _enqueue_if_new(
+                scanner_name, target_value=org.root_domain,
+                organization=org, asset=None,
+            )
+
+        for asset in org.assets.filter(is_active=True):
+            for scanner_name in asset_level_scanners:
+                queued += _enqueue_if_new(
+                    scanner_name, target_value=asset.value,
+                    organization=org, asset=asset,
+                )
+
+    return f"Queued {queued} scan job(s) for today."
+
+
+def _enqueue_if_new(scanner_name, target_value, organization, asset) -> int:
+    idempotency_key = ScanJob.build_idempotency_key(scanner_name, target_value)
+    scan_job, created = ScanJob.objects.get_or_create(
+        idempotency_key=idempotency_key,
+        defaults=dict(organization=organization, asset=asset, scanner_name=scanner_name),
+    )
+    if created:
+        run_scan_job.delay(str(scan_job.id))
+    return 1 if created else 0
