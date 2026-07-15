@@ -14,18 +14,37 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nmap \
     curl \
     unzip \
+    git \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # subfinder: prebuilt release binary (no Go toolchain needed in the image).
 # Pinned version -- bump deliberately, don't auto-track "latest" in a
-# build step.
+# build step. We extract ONLY the 'subfinder' binary to avoid LICENSE/README conflicts.
 ARG SUBFINDER_VERSION=2.14.0
 RUN curl -sL -o /tmp/subfinder.zip \
       "https://github.com/projectdiscovery/subfinder/releases/download/v${SUBFINDER_VERSION}/subfinder_${SUBFINDER_VERSION}_linux_amd64.zip" \
-    && unzip -q /tmp/subfinder.zip -d /usr/local/bin \
+    && unzip -q /tmp/subfinder.zip subfinder -d /usr/local/bin \
     && chmod +x /usr/local/bin/subfinder \
     && rm /tmp/subfinder.zip
+
+# nuclei: prebuilt release binary, same pattern as subfinder.
+# We extract ONLY the 'nuclei' binary to avoid LICENSE/README conflicts.
+ARG NUCLEI_VERSION=3.11.0
+RUN curl -sL -o /tmp/nuclei.zip \
+      "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip" \
+    && unzip -q /tmp/nuclei.zip nuclei -d /usr/local/bin \
+    && chmod +x /usr/local/bin/nuclei \
+    && rm /tmp/nuclei.zip
+
+# nuclei-templates: git clone (shallow) instead of `nuclei -update-templates`.
+# This is deliberate -- the built-in updater calls the GitHub API at
+# build/run time (rate-limited, non-reproducible); a shallow clone at
+# build time is deterministic and doesn't depend on GitHub's API quota.
+# Trade-off: templates are pinned to whatever HEAD was at image build
+# time, not auto-updated -- rebuild the image periodically to refresh.
+RUN git clone --depth 1 https://github.com/projectdiscovery/nuclei-templates.git /opt/nuclei-templates \
+    && rm -rf /opt/nuclei-templates/.git
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
