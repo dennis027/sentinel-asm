@@ -8,14 +8,11 @@ from celery import shared_task
 from django.utils import timezone
 
 from apps.assets.models import Asset, Technology
-
 from apps.findings.models import Finding
+from apps.organizations.models import Organization
 
 from .models import ScanJob
-
-from apps.organizations.models import Organization
 from .plugins.registry import get_scanner, list_scanners
-
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30)
@@ -25,7 +22,8 @@ def run_scan_job(self, scan_job_id: str):
     scan_job.status = ScanJob.Status.RUNNING
     scan_job.started_at = timezone.now()
     scan_job.celery_task_id = self.request.id or ""
-    scan_job.save(update_fields=["status", "started_at", "celery_task_id"])
+    scan_job.error_message = ""
+    scan_job.save(update_fields=["status", "started_at", "celery_task_id", "error_message"])
 
     try:
         scanner_cls = get_scanner(scan_job.scanner_name)
@@ -93,6 +91,7 @@ def run_scan_job(self, scan_job_id: str):
                 if (finding.asset_id, finding.dedupe_key) not in seen:
                     finding.is_active = False
                     finding.save(update_fields=["is_active"])
+
         # Tech fingerprinting is a separate, optional side-channel from
         # findings -- only applies to asset-level scanners that override
         # extract_technologies() (currently just httpx).
@@ -104,6 +103,7 @@ def run_scan_job(self, scan_job_id: str):
                     version=raw_tech.version,
                     defaults={"category": raw_tech.category},
                 )
+
         scan_job.status = ScanJob.Status.SUCCESS
         scan_job.finished_at = timezone.now()
         scan_job.save(update_fields=["status", "finished_at"])
@@ -114,7 +114,7 @@ def run_scan_job(self, scan_job_id: str):
         scan_job.finished_at = timezone.now()
         scan_job.save(update_fields=["status", "error_message", "finished_at"])
         raise self.retry(exc=exc)
-    
+
 
 @shared_task
 def trigger_daily_scans():
