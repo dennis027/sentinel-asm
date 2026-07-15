@@ -70,20 +70,26 @@ class HttpxScanner(BaseScanner):
         return technologies
 
     def _fetch_headers(self, host: str):
-        # Cached per instance-call to avoid double-fetching between run()
-        # and extract_technologies() within the same scan.
-        if hasattr(self, "_headers_cache") and self._headers_cache.get(host) is not None:
-            return self._headers_cache[host]
+            # Cached per instance-call to avoid double-fetching between run()
+            # and extract_technologies() within the same scan.
+            if hasattr(self, "_headers_cache") and self._headers_cache.get(host) is not None:
+                return self._headers_cache[host]
 
-        url = f"https://{host}"
-        request = urllib.request.Request(url, headers={"User-Agent": "asm-platform-httpx/1.0"})
-        try:
-            with urllib.request.urlopen(request, timeout=self.TIMEOUT_SECONDS) as response:
-                # Keep the original email.message.Message object -- its
-                # .get() is case-insensitive, which plain dict() is not.
-                headers = response.headers
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
-            raise RuntimeError(f"httpx scan of {host} failed: {exc}") from exc
+            url = f"https://{host}"
+            request = urllib.request.Request(url, headers={"User-Agent": "asm-platform-httpx/1.0"})
+            try:
+                with urllib.request.urlopen(request, timeout=self.TIMEOUT_SECONDS) as response:
+                    headers = response.headers
+            except urllib.error.HTTPError as exc:
+                # The server responded -- even with 403/404/5xx -- which means
+                # it's reachable and the response headers are real data, not
+                # a scan failure. WAF/bot-protection commonly 403s unrecognized
+                # clients; that's a legitimate finding, not an error to retry.
+                headers = exc.headers
+            except (urllib.error.URLError, TimeoutError) as exc:
+                # Genuine failure to reach the host at all (DNS, connection
+                # refused, timeout) -- this one IS worth retrying.
+                raise RuntimeError(f"httpx scan of {host} failed: {exc}") from exc
 
-        self._headers_cache = {host: headers}
-        return headers
+            self._headers_cache = {host: headers}
+            return headers
