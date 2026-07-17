@@ -8,6 +8,7 @@ only the .env / compose config changes.
 
 from pathlib import Path
 import environ
+from datetime import timedelta  
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -32,12 +33,14 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "corsheaders",
     "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     "django_filters",
-    "drf_spectacular",
+    "drf_spectacular",    
     "django_celery_beat",
     "health",
-    "apps.organizations",  
+    "apps.organizations",
     "apps.assets",
     "apps.scanning",
     "apps.findings",
@@ -46,6 +49,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -110,6 +114,10 @@ AUTH_PASSWORD_VALIDATORS = [
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        # JWT first -- this is what the Angular frontend actually uses.
+        # Session/Basic stay enabled too: Session keeps the browsable API
+        # and /admin/ working, Basic keeps curl/script testing simple.
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.BasicAuthentication",
     ],
@@ -128,6 +136,26 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
 }
 # ---- i18n / static --------------------------------------------------------
+
+SIMPLE_JWT = {
+    # Short-lived access token (sent on every request) + longer refresh
+    # token (used only to mint new access tokens) -- standard JWT
+    # pattern, limits the damage window if an access token leaks.
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+}
+
+# CORS: the Angular dev server runs on a different origin (port 4200)
+# than this API (port 8000) -- browsers block that by default unless
+# the server explicitly allows it. Configurable via env so prod can
+# point at the real deployed frontend URL instead of localhost.
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS", default=["http://localhost:4200"]  
+)
+
+
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
