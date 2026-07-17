@@ -51,6 +51,7 @@ class ScanJob(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
         RUNNING = "running", "Running"
+        RETRYING = "retrying", "Retrying"
         SUCCESS = "success", "Success"
         FAILED = "failed", "Failed"
 
