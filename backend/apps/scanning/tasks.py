@@ -109,10 +109,20 @@ def run_scan_job(self, scan_job_id: str):
         scan_job.save(update_fields=["status", "finished_at"])
 
     except Exception as exc:
-        scan_job.status = ScanJob.Status.FAILED
-        scan_job.error_message = str(exc)
-        scan_job.finished_at = timezone.now()
-        scan_job.save(update_fields=["status", "error_message", "finished_at"])
+        # self.request.retries is 0 on the first attempt, incrementing on
+        # each automatic retry. Only mark the job terminally FAILED once
+        # retries are actually exhausted -- otherwise a manual re-trigger
+        # during the 30s retry backoff window would race the automatic
+        # retry that's already scheduled to run against this same job.
+        if self.request.retries >= self.max_retries:
+            scan_job.status = ScanJob.Status.FAILED
+            scan_job.error_message = str(exc)
+            scan_job.finished_at = timezone.now()
+            scan_job.save(update_fields=["status", "error_message", "finished_at"])
+        else:
+            scan_job.status = ScanJob.Status.RETRYING
+            scan_job.error_message = str(exc)
+            scan_job.save(update_fields=["status", "error_message"])
         raise self.retry(exc=exc)
 
 
