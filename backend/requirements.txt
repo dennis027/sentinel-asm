@@ -9,5 +9,5 @@ gunicorn==23.0.0
 django-celery-beat==2.9.0
 drf-spectacular==0.30.0
 django-cors-headers==4.9.0
-djangorestframework-simplejwt
-django-cors-headers
+djangorestframework-simplejwt==5.5.1
+dnspython==2.8.0
