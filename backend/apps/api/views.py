@@ -18,6 +18,8 @@ from apps.organizations.serializers import OrganizationSerializer
 from apps.scanning.models import ScanJob
 from apps.scanning.serializers import ScanJobSerializer, ScanJobTriggerSerializer
 from apps.scanning.tasks import run_scan_job
+from apps.notifications.models import NotificationRule
+from apps.notifications.serializers import NotificationRuleSerializer
 
 
 class OrganizationViewSet(viewsets.ReadOnlyModelViewSet):
@@ -84,3 +86,15 @@ class FindingViewSet(viewsets.ReadOnlyModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ["asset", "finding_type", "severity", "is_active"]
     search_fields = ["title"]
+
+
+class NotificationRuleViewSet(viewsets.ModelViewSet):
+    """
+    Full CRUD (unlike the mostly-read-only viewsets above) -- these are
+    genuinely user-configured settings, not scanner-populated data.
+    """
+
+    queryset = NotificationRule.objects.select_related("organization")
+    serializer_class = NotificationRuleSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["organization", "is_active", "min_severity"]
