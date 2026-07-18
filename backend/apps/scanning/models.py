@@ -32,7 +32,7 @@ class ScanJobManager(models.Manager):
 
 
 class ScanJob(models.Model):
-    # objects = ScanJobManager()
+    objects = ScanJobManager()
     """
     One execution of one scanner plugin. Two kinds of target:
 

@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from apps.assets.models import Asset, Technology
 from apps.findings.models import Finding
+from apps.notifications.tasks import notify_new_findings
 from apps.organizations.models import Organization
 
 from .models import ScanJob
@@ -37,6 +38,7 @@ def run_scan_job(self, scan_job_id: str):
         # appearing (e.g. a closed port, or for org-level scanners, kept
         # scoped to assets under this organization rather than one asset).
         seen: set[tuple] = set()
+        newly_created_finding_ids: list[str] = []
 
         for rf in raw_findings:
             if scanner.applies_to == "asset":
@@ -55,7 +57,7 @@ def run_scan_job(self, scan_job_id: str):
                 )
 
             dedupe_key = Finding.build_dedupe_key(rf.finding_type, rf.identifier)
-            Finding.objects.update_or_create(
+            finding, finding_created = Finding.objects.update_or_create(
                 asset=finding_asset,
                 dedupe_key=dedupe_key,
                 defaults=dict(
@@ -68,6 +70,8 @@ def run_scan_job(self, scan_job_id: str):
                     is_active=True,
                 ),
             )
+            if finding_created:
+                newly_created_finding_ids.append(str(finding.id))
             seen.add((finding_asset.id, dedupe_key))
 
         # Anything this scanner owns that wasn't seen this run has been
@@ -107,6 +111,9 @@ def run_scan_job(self, scan_job_id: str):
         scan_job.status = ScanJob.Status.SUCCESS
         scan_job.finished_at = timezone.now()
         scan_job.save(update_fields=["status", "finished_at"])
+
+        if newly_created_finding_ids:
+            notify_new_findings.delay(str(scan_job.id), newly_created_finding_ids)
 
     except Exception as exc:
         # self.request.retries is 0 on the first attempt, incrementing on
