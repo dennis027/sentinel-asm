@@ -32,6 +32,7 @@ class Finding(models.Model):
         NUCLEI_MATCH = "nuclei_match", "Nuclei match"
         SUBDOMAIN_DISCOVERED = "subdomain_discovered", "New subdomain discovered"
         DNS_CHANGE = "dns_change", "DNS record change"
+        SCREENSHOT = "screenshot", "Website screenshot"
 
     class Severity(models.TextChoices):
         INFO = "info", "Info"
