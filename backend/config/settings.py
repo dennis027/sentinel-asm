@@ -160,17 +160,21 @@ CORS_ALLOWED_ORIGINS = env.list(
 # celery-worker container's logs instead of needing a real mailbox, so
 # this is fully testable locally with zero SMTP setup. Set EMAIL_BACKEND
 # and the SMTP settings via env when a real mail provider is wired up.
-EMAIL_BACKEND = env(
-    "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
-)
 EMAIL_HOST = env("EMAIL_HOST", default="")
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
-EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")   
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="alerts@sentinel-asm.local")
 
-
+EMAIL_BACKEND = env(
+    "EMAIL_BACKEND",
+    default=(
+        "django.core.mail.backends.smtp.EmailBackend"
+        if EMAIL_HOST
+        else "django.core.mail.backends.console.EmailBackend"
+    ),
+)
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
