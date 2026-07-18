@@ -49,4 +49,12 @@ RUN git clone --depth 1 https://github.com/projectdiscovery/nuclei-templates.git
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Chromium for the screenshot scanner. --with-deps pulls in the OS-level
+# libraries headless Chromium needs (fonts, codecs, etc.) via apt
+# automatically -- don't try to hand-list them, this flag exists
+# specifically so Playwright's own maintainers keep that list current.
+RUN playwright install --with-deps chromium
+
+
+
 COPY . .
