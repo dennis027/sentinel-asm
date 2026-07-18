@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "apps.assets",
     "apps.scanning",
     "apps.findings",
+    "apps.notifications",
     "apps.api",
 ]
 
@@ -155,15 +156,33 @@ CORS_ALLOWED_ORIGINS = env.list(
     "CORS_ALLOWED_ORIGINS", default=["http://localhost:4200"]  
 )
 
+# Email: console backend by default -- notification emails print to the
+# celery-worker container's logs instead of needing a real mailbox, so
+# this is fully testable locally with zero SMTP setup. Set EMAIL_BACKEND
+# and the SMTP settings via env when a real mail provider is wired up.
+EMAIL_BACKEND = env(
+    "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
+)
+EMAIL_HOST = env("EMAIL_HOST", default="")
+EMAIL_PORT = env.int("EMAIL_PORT", default=587)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="alerts@sentinel-asm.local")
+
 
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
-
+  
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"  
+
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -184,4 +203,5 @@ CELERY_TASK_ROUTES = {}  # populated as scanning/reports tasks are added
 # django_celery_beat) rather than a static dict in this settings file --
 # means schedules are viewable/editable in /admin/ without a redeploy.
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+
 
