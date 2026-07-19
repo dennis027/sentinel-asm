@@ -95,19 +95,22 @@ class ScanJob(models.Model):
         return f"{self.scanner_name} -> {target} [{self.status}]"
 
     @staticmethod
-    def build_idempotency_key(scanner_name: str, target: str, run_date: date | None = None) -> str:
+    def build_idempotency_key(
+        scanner_name: str, target: str, run_date: date | None = None, nonce: str | None = None
+    ) -> str:
         """
         Deterministic key = same scanner + same target + same day always
         hashes to the same value. Call this before creating a ScanJob and
         use get_or_create(idempotency_key=...) so a retried task upserts
         instead of duplicating.
+
+        Pass `nonce` (e.g. a random hex string) to deliberately break
+        that determinism -- this is what a manual "scan again" trigger
+        uses to force a brand-new ScanJob even if one already ran today,
+        instead of colliding with the existing key.
         """
         run_date = run_date or date.today()
         raw = f"{scanner_name}:{target}:{run_date.isoformat()}"
+        if nonce:
+            raw += f":{nonce}"
         return hashlib.sha256(raw.encode()).hexdigest()
-
-    def save(self, *args, **kwargs):
-        if not self.idempotency_key:
-            target = self.asset.value if self.asset else self.organization.root_domain
-            self.idempotency_key = self.build_idempotency_key(self.scanner_name, target)
-        super().save(*args, **kwargs)
