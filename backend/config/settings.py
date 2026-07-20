@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "apps.findings",
     "apps.notifications",
     "apps.api",
+    "apps.audit_logs",
 ]
 
 MIDDLEWARE = [
@@ -128,6 +129,13 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 25,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # Brute-force protection on login: 5 attempts per minute per IP.
+    # Scoped specifically to LoginView (throttle_scope="login") rather
+    # than a blanket rate on every endpoint.
+    "DEFAULT_THROTTLE_RATES": {
+        "login": "5/min",
+    },
+
 }
 
 SPECTACULAR_SETTINGS = {
