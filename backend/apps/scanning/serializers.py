@@ -31,6 +31,15 @@ class ScanJobTriggerSerializer(serializers.Serializer):
     scanner_name = serializers.CharField()
     asset_id = serializers.UUIDField(required=False)
     organization_id = serializers.UUIDField(required=False)
+    force = serializers.BooleanField(
+        default=False,
+        help_text=(
+            "If true, always start a brand-new scan even if the same "
+            "scanner already ran against this target today. If false "
+            "(default), retriggering the same scan same-day returns the "
+            "existing job instead of duplicating it."
+        ),
+    )
 
     def validate_scanner_name(self, value):
         registered = list_scanners()
@@ -59,3 +68,16 @@ class ScanJobTriggerSerializer(serializers.Serializer):
             except Organization.DoesNotExist:
                 raise serializers.ValidationError({"organization_id": "No organization with this id."})
         return attrs
+
+
+class ScannerInfoSerializer(serializers.Serializer):
+    """
+    Read-only representation of a registered scanner plugin, for the
+    frontend's "Scanners" tab -- lets the UI build the trigger form
+    (which scanners exist, what they target, what they detect) without
+    hardcoding a scanner list that would drift from the backend.
+    """
+
+    name = serializers.CharField()
+    applies_to = serializers.CharField()
+    owned_finding_types = serializers.ListField(child=serializers.CharField())
