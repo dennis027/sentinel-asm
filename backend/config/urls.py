@@ -8,6 +8,7 @@ from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from apps.api.auth_views import ChangePasswordView, LoginView, LogoutView
 
 urlpatterns = [
+    path("", include("django_prometheus.urls")),
     path("admin/", admin.site.urls),
     path("health/", include("health.urls")),
     path("api/", include("apps.api.urls")),
