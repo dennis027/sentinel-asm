@@ -8,7 +8,6 @@ from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from apps.api.auth_views import ChangePasswordView, LoginView, LogoutView
 
 urlpatterns = [
-    path("", include("django_prometheus.urls")),
     path("admin/", admin.site.urls),
     path("health/", include("health.urls")),
     path("api/", include("apps.api.urls")),
@@ -21,4 +20,5 @@ urlpatterns = [
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
+    path("", include("django_prometheus.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
