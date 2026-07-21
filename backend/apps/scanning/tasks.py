@@ -4,6 +4,9 @@ looks up the right plugin by name, runs it, and reconciles the results
 into Finding rows. Adding a new scanner never touches this file.
 """
 
+import logging
+import time
+
 from celery import shared_task
 from django.utils import timezone
 
@@ -12,19 +15,33 @@ from apps.findings.models import Finding
 from apps.notifications.tasks import notify_new_findings
 from apps.organizations.models import Organization
 
+from .metrics import FINDINGS_CREATED_TOTAL, SCAN_JOB_DURATION_SECONDS, SCAN_JOBS_TOTAL
 from .models import ScanJob
 from .plugins.registry import get_scanner, list_scanners
+
+logger = logging.getLogger("apps.scanning")
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30)
 def run_scan_job(self, scan_job_id: str):
     scan_job = ScanJob.objects.select_related("asset", "organization").get(id=scan_job_id)
+    start_time = time.monotonic()
 
     scan_job.status = ScanJob.Status.RUNNING
     scan_job.started_at = timezone.now()
     scan_job.celery_task_id = self.request.id or ""
     scan_job.error_message = ""
     scan_job.save(update_fields=["status", "started_at", "celery_task_id", "error_message"])
+
+    logger.info(
+        "scan_job_started",
+        extra={
+            "scan_job_id": str(scan_job.id),
+            "scanner_name": scan_job.scanner_name,
+            "organization_id": str(scan_job.organization_id),
+            "asset_id": str(scan_job.asset_id) if scan_job.asset_id else None,
+        },
+    )
 
     try:
         scanner_cls = get_scanner(scan_job.scanner_name)
@@ -72,6 +89,9 @@ def run_scan_job(self, scan_job_id: str):
             )
             if finding_created:
                 newly_created_finding_ids.append(str(finding.id))
+                FINDINGS_CREATED_TOTAL.labels(
+                    finding_type=rf.finding_type, severity=rf.severity
+                ).inc()
             seen.add((finding_asset.id, dedupe_key))
 
         # Anything this scanner owns that wasn't seen this run has been
@@ -112,6 +132,20 @@ def run_scan_job(self, scan_job_id: str):
         scan_job.finished_at = timezone.now()
         scan_job.save(update_fields=["status", "finished_at"])
 
+        duration = time.monotonic() - start_time
+        SCAN_JOB_DURATION_SECONDS.labels(scanner_name=scan_job.scanner_name).observe(duration)
+        SCAN_JOBS_TOTAL.labels(scanner_name=scan_job.scanner_name, status="success").inc()
+
+        logger.info(
+            "scan_job_succeeded",
+            extra={
+                "scan_job_id": str(scan_job.id),
+                "scanner_name": scan_job.scanner_name,
+                "duration_seconds": round(duration, 3),
+                "findings_created": len(newly_created_finding_ids),
+            },
+        )
+
         if newly_created_finding_ids:
             notify_new_findings.delay(str(scan_job.id), newly_created_finding_ids)
 
@@ -126,10 +160,29 @@ def run_scan_job(self, scan_job_id: str):
             scan_job.error_message = str(exc)
             scan_job.finished_at = timezone.now()
             scan_job.save(update_fields=["status", "error_message", "finished_at"])
+            SCAN_JOBS_TOTAL.labels(scanner_name=scan_job.scanner_name, status="failed").inc()
+            logger.error(
+                "scan_job_failed",
+                extra={
+                    "scan_job_id": str(scan_job.id),
+                    "scanner_name": scan_job.scanner_name,
+                    "error": str(exc),
+                    "retries_exhausted": True,
+                },
+            )
         else:
             scan_job.status = ScanJob.Status.RETRYING
             scan_job.error_message = str(exc)
             scan_job.save(update_fields=["status", "error_message"])
+            logger.warning(
+                "scan_job_retrying",
+                extra={
+                    "scan_job_id": str(scan_job.id),
+                    "scanner_name": scan_job.scanner_name,
+                    "error": str(exc),
+                    "attempt": self.request.retries + 1,
+                },
+            )
         raise self.retry(exc=exc)
 
 
@@ -175,6 +228,7 @@ def trigger_daily_scans():
                     organization=org, asset=asset,
                 )
 
+    logger.info("daily_scans_triggered", extra={"jobs_queued": queued})
     return f"Queued {queued} scan job(s) for today."
 
 
