@@ -20,6 +20,8 @@ from apps.scanning.serializers import ScanJobSerializer, ScanJobTriggerSerialize
 from apps.scanning.tasks import run_scan_job
 from apps.notifications.models import NotificationRule
 from apps.notifications.serializers import NotificationRuleSerializer
+from django.db.models import Count
+from apps.findings.risk_scoring import grade_for_score
 
 
 class OrganizationViewSet(viewsets.ReadOnlyModelViewSet):
@@ -27,6 +29,43 @@ class OrganizationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = OrganizationSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ["name", "root_domain"]
+
+    @action(detail=True, methods=["get"], url_path="risk-summary")
+    def risk_summary(self, request, pk=None):
+        """
+        GET /api/organizations/{id}/risk-summary/
+        Aggregates risk across every asset in the org -- average score,
+        grade distribution, and active-finding counts by severity.
+        Computed on request (same as per-asset risk_score), not stored.
+        """
+        organization = self.get_object()
+        assets = list(organization.assets.filter(is_active=True))
+
+        grade_counts: dict[str, int] = {}
+        scores = []
+        for asset in assets:
+            scores.append(asset.risk_score)
+            grade_counts[asset.risk_grade] = grade_counts.get(asset.risk_grade, 0) + 1
+
+        average_score = round(sum(scores) / len(scores), 1) if scores else None
+
+        severity_counts = dict(
+            Finding.objects.filter(asset__organization=organization, is_active=True)
+            .values_list("severity")
+            .annotate(count=Count("id"))
+        )
+
+        return Response({
+            "organization": organization.name,
+            "asset_count": len(assets),
+            "average_risk_score": average_score,
+            "average_risk_grade": grade_for_score(round(average_score)) if average_score is not None else None,
+            "grade_distribution": grade_counts,
+            "active_findings_by_severity": {
+                severity: severity_counts.get(severity, 0)
+                for severity in Finding.Severity.values
+            },
+        })
 
 
 class AssetViewSet(viewsets.ReadOnlyModelViewSet):
