@@ -12,6 +12,7 @@ from django.core.mail import send_mail
 from apps.findings.models import Finding
 
 from .models import NotificationRule
+from apps.scanning.metrics import NOTIFICATIONS_SENT_TOTAL
 
 # Ordering, low to high -- used to compare a finding's severity against
 # a rule's min_severity threshold.
@@ -48,6 +49,7 @@ def notify_new_findings(scan_job_id: str, finding_ids: list[str]):
             continue
         _send_digest_email(rule.recipient_email, organization, matching)
         sent_count += 1
+        NOTIFICATIONS_SENT_TOTAL.inc()
 
     return f"Sent {sent_count} notification email(s) for {len(findings)} new finding(s)."
 
