@@ -146,7 +146,16 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "Attack surface management: assets, scan jobs, and findings.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    # Finding.Severity choices get reused on NotificationRule.min_severity
+    # under a different field name -- without this override,
+    # drf-spectacular generates two differently-named enums for what's
+    # actually the same choice set.
+    "ENUM_NAME_OVERRIDES": {
+        "MinSeverityEnum": "apps.findings.models.Finding.Severity",
+    },
 }
+
 # ---- i18n / static --------------------------------------------------------
 
 SIMPLE_JWT = {
