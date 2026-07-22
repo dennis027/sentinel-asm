@@ -36,6 +36,11 @@ from apps.scanning.tasks import run_scan_job
 
 from .permissions import OrgScopedQuerysetMixin, user_can_access_org
 
+from django.http import HttpResponse
+from django.utils import timezone
+
+from apps.findings.reports import generate_csv, generate_json, generate_pdf
+
 
 class OrganizationViewSet(OrgScopedQuerysetMixin, viewsets.ModelViewSet):
     """
@@ -58,6 +63,54 @@ class OrganizationViewSet(OrgScopedQuerysetMixin, viewsets.ModelViewSet):
         Membership.objects.create(
             user=self.request.user, organization=organization, role=Membership.Role.OWNER
         )
+
+    @action(detail=True, methods=["get"], url_path="export")
+    def export(self, request, pk=None):
+        """
+        GET /api/organizations/{id}/export/?export_format=csv|json|pdf
+        Optional filters: severity, finding_type, is_active (same
+        semantics as GET /api/findings/).
+
+        Uses get_object() (already org-scoped via the mixin) so this
+        can't be used to export another organization's findings just
+        by changing the URL's id.
+        """
+        organization = self.get_object()
+        # NOT named "format" -- that's DRF's own reserved query param for
+        # content-negotiation (?format=json forces the JSON renderer,
+        # etc). Using it here would silently 404 before this view even
+        # runs, since DRF tries to find a renderer for "csv"/"pdf" and
+        # fails.
+        export_format = request.query_params.get("export_format", "csv").lower()
+        if export_format not in ("csv", "json", "pdf"):
+            return Response(
+                {"export_format": ["Must be one of: csv, json, pdf."]}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        findings = Finding.objects.filter(asset__organization=organization).select_related("asset")
+        if severity := request.query_params.get("severity"):
+            findings = findings.filter(severity=severity)
+        if finding_type := request.query_params.get("finding_type"):
+            findings = findings.filter(finding_type=finding_type)
+        if (is_active := request.query_params.get("is_active")) is not None:
+            findings = findings.filter(is_active=is_active.lower() == "true")
+
+        findings = list(findings.order_by("-severity", "-first_seen"))
+        filename_base = f"{organization.root_domain}-findings-{timezone.now().strftime('%Y%m%d')}"
+
+        if export_format == "csv":
+            content = generate_csv(findings)
+            content_type = "text/csv"
+        elif export_format == "json":
+            content = generate_json(findings)
+            content_type = "application/json"
+        else:
+            content = generate_pdf(findings, organization.name)
+            content_type = "application/pdf"
+
+        response = HttpResponse(content, content_type=content_type)
+        response["Content-Disposition"] = f'attachment; filename="{filename_base}.{export_format}"'
+        return response
 
     @action(detail=True, methods=["get"], url_path="risk-summary")
     def risk_summary(self, request, pk=None):
