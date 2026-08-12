@@ -40,7 +40,7 @@ from django.http import HttpResponse
 from django.utils import timezone
 
 from apps.findings.reports import generate_csv, generate_json, generate_pdf
-
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 
 class OrganizationViewSet(OrgScopedQuerysetMixin, viewsets.ModelViewSet):
     """
@@ -63,7 +63,15 @@ class OrganizationViewSet(OrgScopedQuerysetMixin, viewsets.ModelViewSet):
         Membership.objects.create(
             user=self.request.user, organization=organization, role=Membership.Role.OWNER
         )
-
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("export_format", OpenApiTypes.STR, enum=["csv", "json", "pdf"], default="csv"),
+            OpenApiParameter("severity", OpenApiTypes.STR, required=False),
+            OpenApiParameter("finding_type", OpenApiTypes.STR, required=False),
+            OpenApiParameter("is_active", OpenApiTypes.BOOL, required=False),
+        ],
+        responses={200: OpenApiTypes.BINARY},
+    )
     @action(detail=True, methods=["get"], url_path="export")
     def export(self, request, pk=None):
         """
@@ -239,7 +247,7 @@ class ScannerListView(APIView):
     Not org-scoped -- this describes the PLATFORM's capabilities
     (which scanners exist at all), not any tenant's data.
     """
-
+    @extend_schema(responses={200: ScannerInfoSerializer(many=True)})
     def get(self, request):
         scanners = [
             {

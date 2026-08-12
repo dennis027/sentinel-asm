@@ -1,13 +1,8 @@
-"""
-Auth lifecycle endpoints beyond the base JWT obtain/refresh/verify
-already wired up in config/urls.py: rate-limited login (wraps the
-existing TokenObtainPairView), explicit logout, and change-password.
-"""
-
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from rest_framework import permissions, status
+from drf_spectacular.utils import OpenApiResponse, extend_schema
+from rest_framework import permissions, serializers, status
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -20,6 +15,26 @@ from apps.audit_logs.models import AuthEvent
 from apps.audit_logs.utils import get_client_ip, get_user_agent
 
 User = get_user_model()
+
+# Plain APIViews (LogoutView, ChangePasswordView below) can't be
+# auto-introspected by drf-spectacular the way GenericAPIView/ViewSets
+# with a serializer_class can -- without these request/response
+# serializers and the @extend_schema decorators below, both endpoints
+# would still WORK but show up in Swagger with an undocumented,
+# guessable-only request body.
+class LogoutRequestSerializer(serializers.Serializer):
+    refresh = serializers.CharField(help_text="The refresh token to blacklist.")
+
+
+class ChangePasswordRequestSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True)
+
+
+class ChangePasswordResponseSerializer(serializers.Serializer):
+    detail = serializers.CharField()
+
+
 
 
 class LoginView(TokenObtainPairView):
@@ -72,7 +87,10 @@ class LogoutView(APIView):
     """
 
     permission_classes = [permissions.IsAuthenticated]
-
+    @extend_schema(
+        request=LogoutRequestSerializer,
+        responses={204: None, 400: OpenApiResponse(description="Missing or invalid refresh token")},
+    )
     def post(self, request):
         refresh_token = request.data.get("refresh")
         if not refresh_token:
@@ -111,6 +129,10 @@ class ChangePasswordView(APIView):
 
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        request=LogoutRequestSerializer,
+        responses={204: None, 400: OpenApiResponse(description="Missing or invalid refresh token")},
+    )
     def post(self, request):
         current_password = request.data.get("current_password", "")
         new_password = request.data.get("new_password", "")
