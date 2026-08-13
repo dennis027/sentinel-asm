@@ -1,1 +1,67 @@
-<p>dashboard works!</p>
+<div class="page">
+  @if (isLoading()) {
+    <p class="muted">Loading…</p>
+  } @else if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
+  } @else {
+    <div class="header">
+      <div>
+        <h1>Dashboard</h1>
+        <p class="muted">{{ organization()?.name }}</p>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric-card">
+        <p class="metric-label">Risk grade</p>
+        <p class="metric-value grade-{{ riskSummary()?.average_risk_grade }}">
+          {{ riskSummary()?.average_risk_grade ?? '—' }}
+        </p>
+      </div>
+      <div class="metric-card">
+        <p class="metric-label">Assets</p>
+        <p class="metric-value">{{ assetCount() }}</p>
+      </div>
+      <div class="metric-card">
+        <p class="metric-label">Active findings</p>
+        <p class="metric-value">
+          {{ activeFindingsTotal() }}
+        </p>
+      </div>
+      <div class="metric-card">
+        <p class="metric-label">Critical</p>
+        <p class="metric-value critical">
+          {{ riskSummary()?.active_findings_by_severity?.critical ?? 0 }}
+        </p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">Recent findings</p>
+      @if (recentFindings().length === 0) {
+        <p class="muted">No active findings.</p>
+      } @else {
+        <table>
+          <thead>
+            <tr>
+              <th>Severity</th>
+              <th>Title</th>
+              <th>Asset</th>
+              <th>Last seen</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (finding of recentFindings(); track finding.id) {
+              <tr>
+                <td><span class="badge severity-{{ finding.severity }}">{{ finding.severity | uppercase }}</span></td>
+                <td>{{ finding.title }}</td>
+                <td class="muted">{{ finding.asset_value }}</td>
+                <td class="muted">{{ finding.last_seen | date: 'short' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </div>
+  }
+</div>
