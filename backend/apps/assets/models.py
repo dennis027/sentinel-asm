@@ -48,6 +48,19 @@ class Asset(models.Model):
         return self.value
 
 
+    @property
+    def risk_score(self) -> int:
+        # Deferred import avoids circular dependency at module load time
+        # (apps.findings imports apps.assets, so top-level import fails)
+        from apps.findings.risk_scoring import calculate_risk_score
+        return calculate_risk_score(self.findings.filter(is_active=True))
+
+    @property
+    def risk_grade(self) -> str:
+        from apps.findings.risk_scoring import grade_for_score
+        return grade_for_score(self.risk_score)
+
+
 class Technology(models.Model):
     """
     A detected technology on an Asset (e.g. nginx 1.25, WordPress 6.4),
