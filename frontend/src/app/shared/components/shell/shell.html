@@ -1,0 +1,14 @@
+<div class="shell">
+  <nav class="sidebar">
+    <a routerLink="/dashboard" class="brand" title="Sentinel ASM">S</a>
+    <a routerLink="/dashboard" routerLinkActive="active" class="nav-link" title="Dashboard">Dash</a>
+    <a routerLink="/assets" routerLinkActive="active" class="nav-link" title="Assets">Asset</a>
+    <a routerLink="/scanners" routerLinkActive="active" class="nav-link" title="Scanners">Scan</a>
+    <a routerLink="/findings" routerLinkActive="active" class="nav-link" title="Findings">Find</a>
+    <a routerLink="/notification-rules" routerLinkActive="active" class="nav-link" title="Notifications">Notif</a>
+    <button class="nav-link signout" (click)="auth.logout()" title="Sign out">Exit</button>
+  </nav>
+  <main class="content">
+    <router-outlet />
+  </main>
+</div>
