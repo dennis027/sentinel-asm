@@ -9,22 +9,28 @@ interface TokenPair {
   refresh: string;
 }
 
+const ACCESS_TOKEN_KEY = 'sentinel_access_token';
+const REFRESH_TOKEN_KEY = 'sentinel_refresh_token';
+const USERNAME_KEY = 'sentinel_username';
+
 /**
- * Both tokens live only in memory (a signal), never localStorage or
- * sessionStorage -- deliberate XSS mitigation, matching the backend's
- * own access-token-in-memory design. Trade-off: a hard page refresh
- * loses the session and requires re-login, since the backend issues
- * tokens in the JSON body rather than an httpOnly cookie. Acceptable
- * for this app; revisit if that friction becomes a real UX problem.
+ * Tokens persist in localStorage so a page reload doesn't force a
+ * re-login -- a deliberate trade-off, not an oversight. This is
+ * LESS XSS-resistant than the memory-only approach (any injected
+ * script can read localStorage), but is the standard, accepted choice
+ * for most apps that aren't handling especially high-value sessions.
+ * If this app's threat model changes later, the fix is httpOnly
+ * cookies issued by the backend instead -- that requires backend
+ * changes (Set-Cookie on login/refresh), not just a frontend swap.
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
 
-  private readonly accessToken = signal<string | null>(null);
-  private readonly refreshToken = signal<string | null>(null);
-  private readonly username = signal<string | null>(null);
+  private readonly accessToken = signal<string | null>(localStorage.getItem(ACCESS_TOKEN_KEY));
+  private readonly refreshToken = signal<string | null>(localStorage.getItem(REFRESH_TOKEN_KEY));
+  private readonly username = signal<string | null>(localStorage.getItem(USERNAME_KEY));
 
   readonly isAuthenticated = computed(() => this.accessToken() !== null);
   readonly currentUsername = computed(() => this.username());
@@ -38,9 +44,7 @@ export class AuthService {
       .post<TokenPair>(`${environment.apiBaseUrl}/auth/login/`, { username, password })
       .pipe(
         tap((tokens) => {
-          this.accessToken.set(tokens.access);
-          this.refreshToken.set(tokens.refresh);
-          this.username.set(username);
+          this.setSession(tokens.access, tokens.refresh, username);
         }),
       );
   }
@@ -69,10 +73,12 @@ export class AuthService {
       .pipe(
         tap((tokens) => {
           this.accessToken.set(tokens.access);
+          localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access);
           // ROTATE_REFRESH_TOKENS is on server-side -- a new refresh
           // token comes back on every refresh, replace it.
           if (tokens.refresh) {
             this.refreshToken.set(tokens.refresh);
+            localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh);
           }
         }),
       );
@@ -90,5 +96,17 @@ export class AuthService {
     this.accessToken.set(null);
     this.refreshToken.set(null);
     this.username.set(null);
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(USERNAME_KEY);
+  }
+
+  private setSession(access: string, refresh: string, username: string): void {
+    this.accessToken.set(access);
+    this.refreshToken.set(refresh);
+    this.username.set(username);
+    localStorage.setItem(ACCESS_TOKEN_KEY, access);
+    localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+    localStorage.setItem(USERNAME_KEY, username);
   }
 }
