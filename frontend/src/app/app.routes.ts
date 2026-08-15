@@ -18,8 +18,7 @@ export const routes: Routes = [
       },
       {
         path: 'assets',
-        loadComponent: () =>
-          import('./shared/components/coming-soon/coming-soon').then((m) => m.ComingSoon),
+        loadComponent: () => import('./features/assets/assets').then((m) => m.Assets),
       },
       {
         path: 'scanners',
