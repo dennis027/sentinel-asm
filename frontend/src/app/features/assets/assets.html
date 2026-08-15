@@ -1,0 +1,56 @@
+<div class="page">
+  <div class="header">
+    <h1>Assets</h1>
+    <div class="controls">
+      <input
+        type="text"
+        placeholder="Search assets"
+        [ngModel]="searchTerm()"
+        (ngModelChange)="onSearchChange($event)"
+      />
+      <select [ngModel]="assetTypeFilter()" (ngModelChange)="onTypeFilterChange($event)">
+        <option value="">All types</option>
+        <option value="domain">Domain</option>
+        <option value="subdomain">Subdomain</option>
+        <option value="ip">IP</option>
+        <option value="url">URL</option>
+      </select>
+    </div>
+  </div>
+
+  @if (isLoading()) {
+    <p class="muted">Loading…</p>
+  } @else if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
+  } @else if (assets().length === 0) {
+    <p class="muted">No assets match these filters.</p>
+  } @else {
+    <table>
+      <thead>
+        <tr>
+          <th>Asset</th>
+          <th>Type</th>
+          <th>Technologies</th>
+          <th>Risk</th>
+          <th>Last seen</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (asset of assets(); track asset.id) {
+          <tr>
+            <td>{{ asset.value }}</td>
+            <td class="muted">{{ asset.asset_type }}</td>
+            <td class="muted">
+              {{ asset.technologies.length ? techNames(asset) : '—' }}
+            </td>
+            <td>
+              <span class="badge grade-{{ asset.risk_grade }}">{{ asset.risk_grade }}</span>
+            </td>
+            <td class="muted">{{ asset.last_seen | date: 'short' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    <p class="muted count">{{ totalCount() }} asset(s) total</p>
+  }
+</div>
