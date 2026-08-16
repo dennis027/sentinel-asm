@@ -1,0 +1,51 @@
+<div class="page">
+  <div class="header">
+    <h1>Findings</h1>
+    <div class="export-buttons">
+      <button class="secondary" (click)="downloadExport('csv')">CSV</button>
+      <button class="secondary" (click)="downloadExport('json')">JSON</button>
+      <button class="secondary" (click)="downloadExport('pdf')">PDF</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <select [ngModel]="severityFilter()" (ngModelChange)="onSeverityChange($event)">
+      <option value="">All severities</option>
+      <option value="critical">Critical</option>
+      <option value="high">High</option>
+      <option value="medium">Medium</option>
+      <option value="low">Low</option>
+      <option value="info">Info</option>
+    </select>
+    <div class="toggle">
+      <button
+        [class.active]="statusFilter() === 'active'"
+        (click)="onStatusChange('active')"
+      >Active</button>
+      <button
+        [class.active]="statusFilter() === 'resolved'"
+        (click)="onStatusChange('resolved')"
+      >Resolved</button>
+    </div>
+  </div>
+
+  @if (isLoading()) {
+    <p class="muted">Loading…</p>
+  } @else if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
+  } @else if (findings().length === 0) {
+    <p class="muted">No findings match these filters.</p>
+  } @else {
+    <div class="list">
+      @for (finding of findings(); track finding.id) {
+        <div class="row">
+          <span class="badge severity-{{ finding.severity }}">{{ finding.severity }}</span>
+          <div class="details">
+            <p class="title">{{ finding.title }}</p>
+            <p class="meta muted">{{ finding.asset_value }} · {{ finding.finding_type }}</p>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>
