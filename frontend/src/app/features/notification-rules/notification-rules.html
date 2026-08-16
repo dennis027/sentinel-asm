@@ -1,0 +1,53 @@
+<div class="page">
+  <div class="header">
+    <h1>Notification rules</h1>
+    @if (!isAdding()) {
+      <button (click)="showAddForm()">Add rule</button>
+    }
+  </div>
+
+  @if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
+  }
+
+  @if (isAdding()) {
+    <div class="add-form">
+      <input
+        type="email"
+        placeholder="recipient@example.com"
+        [ngModel]="newEmail()"
+        (ngModelChange)="newEmail.set($event)"
+      />
+      <select [ngModel]="newSeverity()" (ngModelChange)="newSeverity.set($event)">
+        <option value="info">Info and above</option>
+        <option value="low">Low and above</option>
+        <option value="medium">Medium and above</option>
+        <option value="high">High and above</option>
+        <option value="critical">Critical only</option>
+      </select>
+      <button (click)="submitNewRule()">Save</button>
+      <button class="secondary" (click)="cancelAdd()">Cancel</button>
+    </div>
+  }
+
+  @if (isLoading()) {
+    <p class="muted">Loading…</p>
+  } @else if (rules().length === 0 && !isAdding()) {
+    <p class="muted">No notification rules yet.</p>
+  } @else {
+    <div class="list">
+      @for (rule of rules(); track rule.id) {
+        <div class="row">
+          <div class="details">
+            <p class="email">{{ rule.recipient_email }}</p>
+            <p class="meta muted">Notify on {{ rule.min_severity }} and above</p>
+          </div>
+          <div class="actions">
+            <span class="badge">{{ rule.is_active ? 'Active' : 'Inactive' }}</span>
+            <button class="icon-btn" (click)="deleteRule(rule)" title="Delete">✕</button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>
