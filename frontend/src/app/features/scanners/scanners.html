@@ -1,0 +1,44 @@
+<div class="page">
+  <h1>Scanners</h1>
+  <p class="muted">Trigger a scan against an asset or the whole organization.</p>
+
+  @if (isLoading()) {
+    <p class="muted">Loading…</p>
+  } @else if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
+  } @else {
+    <div class="grid">
+      @for (scanner of scanners(); track scanner.name) {
+        <div class="card">
+          <p class="name">{{ scanner.name }}</p>
+          <p class="scope muted">
+            {{ scanner.applies_to === 'organization' ? 'Org-wide' : 'Per asset' }}
+          </p>
+
+          @if (pickingAssetFor() === scanner.name) {
+            <select #assetPick>
+              <option value="">Choose an asset…</option>
+              @for (asset of assets(); track asset.id) {
+                <option [value]="asset.id">{{ asset.value }}</option>
+              }
+            </select>
+            <div class="picker-actions">
+              <button (click)="confirmAssetPick(scanner.name, assetPick.value)">Go</button>
+              <button class="secondary" (click)="cancelAssetPick()">Cancel</button>
+            </div>
+          } @else if (activeJobs()[scanner.name]; as job) {
+            <p class="status status-{{ job.status }}">
+              {{ job.status }}
+              @if (job.status === 'failed') {
+                — {{ job.error_message }}
+              }
+            </p>
+            <button (click)="runScan(scanner)">Run again</button>
+          } @else {
+            <button (click)="runScan(scanner)">Run scan</button>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>
