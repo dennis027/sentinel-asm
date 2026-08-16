@@ -22,18 +22,16 @@ export const routes: Routes = [
       },
       {
         path: 'scanners',
-        loadComponent: () =>
-          import('./shared/components/coming-soon/coming-soon').then((m) => m.ComingSoon),
+        loadComponent: () => import('./features/scanners/scanners').then((m) => m.Scanners),
       },
       {
         path: 'findings',
-        loadComponent: () =>
-          import('./shared/components/coming-soon/coming-soon').then((m) => m.ComingSoon),
+        loadComponent: () => import('./features/findings/findings').then((m) => m.Findings),
       },
       {
         path: 'notification-rules',
         loadComponent: () =>
-          import('./shared/components/coming-soon/coming-soon').then((m) => m.ComingSoon),
+          import('./features/notification-rules/notification-rules').then((m) => m.NotificationRules),
       },
     ],
   },
