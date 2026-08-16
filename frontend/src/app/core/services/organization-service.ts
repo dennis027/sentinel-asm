@@ -17,10 +17,13 @@ export class OrganizationService {
     return this.http.get<RiskSummary>(`${this.base}/${id}/risk-summary/`);
   }
 
-  exportUrl(id: string, format: 'csv' | 'json' | 'pdf'): string {
+  export(id: string, format: 'csv' | 'json' | 'pdf'): Observable<Blob> {
     // NOT "format" as the query param -- that's DRF's own reserved
     // content-negotiation parameter (see the backend's export action
-    // docstring). Kept as export_format here to match exactly.
-    return `${this.base}/${id}/export/?export_format=${format}`;
+    // docstring).
+    return this.http.get(`${this.base}/${id}/export/`, {
+      params: { export_format: format },
+      responseType: 'blob',
+    });
   }
 }
