@@ -33,6 +33,10 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/notification-rules/notification-rules').then((m) => m.NotificationRules),
       },
+      {
+        path: 'scan-history',
+        loadComponent: () => import('./features/scan-history/scan-history').then((m) => m.ScanHistory),
+      },
     ],
   },
 ];

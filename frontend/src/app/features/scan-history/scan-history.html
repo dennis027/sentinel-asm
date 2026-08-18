@@ -1,0 +1,64 @@
+<div class="page">
+  <div class="header">
+    <div>
+      <h1>Scan history</h1>
+      <p class="muted">Every scan ever run for this organization.</p>
+    </div>
+    <select [ngModel]="statusFilter()" (ngModelChange)="onStatusChange($event)">
+      <option value="">All statuses</option>
+      <option value="success">Success</option>
+      <option value="failed">Failed</option>
+      <option value="running">Running</option>
+      <option value="retrying">Retrying</option>
+      <option value="pending">Pending</option>
+    </select>
+  </div>
+
+  @if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
+  }
+
+  @if (isLoading()) {
+    <p class="muted">Loading…</p>
+  } @else if (jobs().length === 0) {
+    <p class="muted">No scans yet — trigger one from the Scanners tab.</p>
+  } @else {
+    <table>
+      <thead>
+        <tr>
+          <th>Scanner</th>
+          <th>Target</th>
+          <th>Status</th>
+          <th>Started</th>
+          <th>Finished</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (job of jobs(); track job.id) {
+          <tr>
+            <td>{{ job.scanner_name }}</td>
+            <td class="muted">{{ job.asset_value ?? job.organization_name }}</td>
+            <td>
+              <span class="badge status-{{ job.status }}">{{ job.status }}</span>
+              @if (job.status === 'failed' && job.error_message) {
+                <p class="error-detail">{{ job.error_message }}</p>
+              }
+            </td>
+            <td class="muted">{{ job.started_at ? (job.started_at | date: 'short') : '—' }}</td>
+            <td class="muted">{{ job.finished_at ? (job.finished_at | date: 'short') : '—' }}</td>
+            <td>
+              <button
+                class="secondary"
+                [disabled]="rerunningJobId() === job.id"
+                (click)="rerun(job)"
+              >
+                {{ rerunningJobId() === job.id ? 'Starting…' : 'Re-run' }}
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>

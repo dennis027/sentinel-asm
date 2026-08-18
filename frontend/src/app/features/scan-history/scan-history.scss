@@ -1,0 +1,94 @@
+.page {
+  padding: var(--space-6);
+  max-width: 1100px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-4);
+}
+
+h1 {
+  margin: 0 0 2px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  margin: 0;
+}
+
+.error {
+  color: var(--color-danger);
+  font-size: 13px;
+  margin: 0 0 var(--space-3);
+}
+
+.error-detail {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--color-danger);
+  max-width: 240px;
+}
+
+table {
+  width: 100%;
+  font-size: 13px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  padding: var(--space-3);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--color-surface-alt);
+  border-bottom: 1px solid var(--color-border);
+}
+
+td {
+  padding: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+tr:first-child td { border-top: none; }
+tbody tr:hover td { background: var(--color-surface-alt); }
+
+.badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  text-transform: capitalize;
+
+  &.status-success { background: var(--color-success-bg); color: var(--color-success); }
+  &.status-failed { background: var(--color-danger-bg); color: var(--color-danger); }
+  &.status-running, &.status-pending, &.status-retrying { background: var(--color-warning-bg); color: var(--color-warning); }
+}
+
+.secondary {
+  height: 30px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  padding: 0 var(--space-3);
+  width: auto;
+
+  &:hover:not(:disabled) { background: var(--color-surface-alt); }
+  &:disabled { opacity: 0.6; cursor: default; }
+}

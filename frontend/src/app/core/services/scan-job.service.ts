@@ -57,4 +57,19 @@ export class ScanJobService {
       return () => clearTimeout(timeoutId);
     });
   }
+
+
+    /** Re-runs a past scan job with the exact same target, bypassing
+   * same-day idempotency (force: true) so it genuinely re-executes
+   * even if it already ran today. */
+  rerun(job: ScanJob): Observable<ScanJob> {
+    return this.trigger({
+      scanner_name: job.scanner_name,
+      asset_id: job.asset ?? undefined,
+      organization_id: job.asset ? undefined : job.organization,
+      force: true,
+    });
+  }
+
+  
 }
