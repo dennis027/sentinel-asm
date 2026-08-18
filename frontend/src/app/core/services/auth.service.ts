@@ -12,17 +12,11 @@ interface TokenPair {
 const ACCESS_TOKEN_KEY = 'sentinel_access_token';
 const REFRESH_TOKEN_KEY = 'sentinel_refresh_token';
 const USERNAME_KEY = 'sentinel_username';
+// Owned by OrganizationContextService, cleared here too on logout so a
+// different account logging in on the same browser doesn't briefly
+// inherit a stale org selection before its own load completes.
+const SELECTED_ORG_KEY = 'sentinel_selected_org_id';
 
-/**
- * Tokens persist in localStorage so a page reload doesn't force a
- * re-login -- a deliberate trade-off, not an oversight. This is
- * LESS XSS-resistant than the memory-only approach (any injected
- * script can read localStorage), but is the standard, accepted choice
- * for most apps that aren't handling especially high-value sessions.
- * If this app's threat model changes later, the fix is httpOnly
- * cookies issued by the backend instead -- that requires backend
- * changes (Set-Cookie on login/refresh), not just a frontend swap.
- */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
@@ -51,10 +45,6 @@ export class AuthService {
 
   logout(): void {
     const refresh = this.refreshToken();
-    // Fire-and-forget: clear local state regardless of whether the
-    // blacklist call succeeds (e.g. network drop) -- the user should
-    // never be stuck "logged in" locally just because this one request
-    // failed.
     if (refresh) {
       this.http
         .post(`${environment.apiBaseUrl}/auth/logout/`, { refresh })
@@ -64,7 +54,6 @@ export class AuthService {
     this.router.navigate(['/login']);
   }
 
-  /** Called by the auth interceptor on a 401 to attempt a silent refresh. */
   refreshAccessToken(): Observable<TokenPair> {
     return this.http
       .post<TokenPair>(`${environment.apiBaseUrl}/token/refresh/`, {
@@ -74,8 +63,6 @@ export class AuthService {
         tap((tokens) => {
           this.accessToken.set(tokens.access);
           localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access);
-          // ROTATE_REFRESH_TOKENS is on server-side -- a new refresh
-          // token comes back on every refresh, replace it.
           if (tokens.refresh) {
             this.refreshToken.set(tokens.refresh);
             localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh);
@@ -99,6 +86,7 @@ export class AuthService {
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(USERNAME_KEY);
+    localStorage.removeItem(SELECTED_ORG_KEY);
   }
 
   private setSession(access: string, refresh: string, username: string): void {

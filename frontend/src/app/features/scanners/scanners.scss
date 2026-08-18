@@ -1,74 +1,76 @@
 .page {
-  padding: 24px;
+  padding: var(--space-6);
+  max-width: 1100px;
 }
 
 h1 {
   margin: 0 0 4px;
-  font-size: 20px;
+  font-size: 22px;
+  font-weight: 600;
 }
 
 .muted {
-  color: #6b7280;
+  color: var(--color-text-secondary);
   font-size: 13px;
-  margin: 0 0 16px;
+  margin: 0 0 var(--space-5);
 }
 
 .error {
-  color: #b42318;
+  color: var(--color-danger);
   font-size: 13px;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-3);
 }
 
 .card {
-  background: #f6f7f9;
-  border-radius: 10px;
-  padding: 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-4);
+  transition: box-shadow 0.15s ease;
+
+  &:hover { box-shadow: var(--shadow-md); }
 }
 
 .name {
   margin: 0 0 2px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .scope {
-  margin-bottom: 12px !important;
+  margin-bottom: var(--space-4) !important;
 }
 
 select {
   width: 100%;
-  height: 32px;
-  font-size: 12px;
-  margin-bottom: 8px;
-  border: 1px solid #d0d3d9;
-  border-radius: 6px;
+  margin-bottom: var(--space-2);
 }
 
 .picker-actions {
   display: flex;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 button {
-  height: 30px;
-  font-size: 12px;
-  border: none;
-  border-radius: 6px;
-  background: #111827;
+  height: 32px;
+  background: var(--color-accent);
   color: #fff;
-  cursor: pointer;
-  padding: 0 12px;
+  padding: 0 var(--space-3);
   width: 100%;
+  font-weight: 500;
+
+  &:hover { background: var(--color-accent-hover); }
 
   &.secondary {
     background: transparent;
-    color: #6b7280;
-    border: 1px solid #d0d3d9;
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
     width: auto;
     flex-shrink: 0;
   }
@@ -81,10 +83,11 @@ button {
 
 .status {
   font-size: 12px;
-  margin: 0 0 8px;
+  font-weight: 500;
+  margin: 0 0 var(--space-2);
   text-transform: capitalize;
 
-  &.status-success { color: #067647; }
-  &.status-failed { color: #b42318; }
-  &.status-running, &.status-pending, &.status-retrying { color: #b54708; }
+  &.status-success { color: var(--color-success); }
+  &.status-failed { color: var(--color-danger); }
+  &.status-running, &.status-pending, &.status-retrying { color: var(--color-warning); }
 }

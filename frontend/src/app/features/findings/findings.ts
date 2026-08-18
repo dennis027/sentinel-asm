@@ -1,7 +1,8 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Finding, Organization, Severity } from '../../core/models/models';
+import { Finding, Severity } from '../../core/models/models';
 import { FindingService } from '../../core/services/finding-service';
+import { OrganizationContextService } from '../../core/services/organization-context-service';
 import { OrganizationService } from '../../core/services/organization-service';
 
 @Component({
@@ -10,23 +11,28 @@ import { OrganizationService } from '../../core/services/organization-service';
   templateUrl: './findings.html',
   styleUrl: './findings.scss',
 })
-export class Findings implements OnInit {
+export class Findings {
   private readonly findingService = inject(FindingService);
   private readonly orgService = inject(OrganizationService);
+  protected readonly orgContext = inject(OrganizationContextService);
 
   readonly findings = signal<Finding[]>([]);
-  readonly organization = signal<Organization | null>(null);
   readonly isLoading = signal(true);
   readonly errorMessage = signal<string | null>(null);
 
   readonly severityFilter = signal<Severity | ''>('');
   readonly statusFilter = signal<'active' | 'resolved'>('active');
 
-  ngOnInit(): void {
-    this.orgService.list().subscribe({
-      next: (page) => this.organization.set(page.results[0] ?? null),
+  constructor() {
+    effect(() => {
+      // Re-reading selectedOrganization() here just to establish the
+      // dependency -- fetchFindings() below isn't org-filtered directly
+      // (findings are asset-scoped, not directly org-filterable via this
+      // endpoint), but re-running on org change keeps this page
+      // consistent with the rest of the app when the org switches.
+      this.orgContext.selectedOrganization();
+      this.fetchFindings();
     });
-    this.fetchFindings();
   }
 
   onSeverityChange(value: string): void {
@@ -40,7 +46,7 @@ export class Findings implements OnInit {
   }
 
   downloadExport(format: 'csv' | 'json' | 'pdf'): void {
-    const org = this.organization();
+    const org = this.orgContext.selectedOrganization();
     if (!org) return;
 
     this.orgService.export(org.id, format).subscribe({

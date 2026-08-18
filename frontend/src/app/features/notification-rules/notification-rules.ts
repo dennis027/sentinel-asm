@@ -1,20 +1,20 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { NotificationRule, Organization, Severity } from '../../core/models/models';
-import { OrganizationService } from '../../core/services/organization-service';
+import { NotificationRule, Severity } from '../../core/models/models';
+import { OrganizationContextService } from '../../core/services/organization-context-service';
 import { NotificationRuleService } from '../../core/services/notification-rule-service';
+
 @Component({
   selector: 'app-notification-rules',
   imports: [FormsModule],
   templateUrl: './notification-rules.html',
   styleUrl: './notification-rules.scss',
 })
-export class NotificationRules implements OnInit {
+export class NotificationRules {
   private readonly ruleService = inject(NotificationRuleService);
-  private readonly orgService = inject(OrganizationService);
+  protected readonly orgContext = inject(OrganizationContextService);
 
   readonly rules = signal<NotificationRule[]>([]);
-  readonly organization = signal<Organization | null>(null);
   readonly isLoading = signal(true);
   readonly errorMessage = signal<string | null>(null);
 
@@ -22,21 +22,12 @@ export class NotificationRules implements OnInit {
   readonly newEmail = signal('');
   readonly newSeverity = signal<Severity>('medium');
 
-  ngOnInit(): void {
-    this.orgService.list().subscribe({
-      next: (page) => {
-        const org = page.results[0] ?? null;
-        this.organization.set(org);
-        if (org) {
-          this.fetchRules(org.id);
-        } else {
-          this.isLoading.set(false);
-        }
-      },
-      error: () => {
-        this.errorMessage.set('Could not load organization.');
-        this.isLoading.set(false);
-      },
+  constructor() {
+    effect(() => {
+      const org = this.orgContext.selectedOrganization();
+      if (org) {
+        this.fetchRules(org.id);
+      }
     });
   }
 
@@ -51,7 +42,7 @@ export class NotificationRules implements OnInit {
   }
 
   submitNewRule(): void {
-    const org = this.organization();
+    const org = this.orgContext.selectedOrganization();
     if (!org || !this.newEmail()) return;
 
     this.ruleService

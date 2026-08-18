@@ -1,9 +1,10 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { DatePipe, UpperCasePipe } from '@angular/common';
 import { Finding, Organization, RiskSummary } from '../../core/models/models';
 import { AssetService } from '../../core/services/asset-service';
 import { FindingService } from '../../core/services/finding-service';
 import { OrganizationService } from '../../core/services/organization-service';
+import { OrganizationContextService } from '../../core/services/organization-context-service';
 @Component({
   selector: 'app-dashboard',
   imports: [DatePipe, UpperCasePipe],
@@ -14,8 +15,9 @@ export class Dashboard implements OnInit {
   private readonly orgService = inject(OrganizationService);
   private readonly findingService = inject(FindingService);
   private readonly assetService = inject(AssetService);
+  protected readonly orgContext = inject(OrganizationContextService);
 
-  readonly organization = signal<Organization | null>(null);
+
   readonly riskSummary = signal<RiskSummary | null>(null);
   readonly recentFindings = signal<Finding[]>([]);
   readonly assetCount = signal<number>(0);
@@ -28,28 +30,24 @@ export class Dashboard implements OnInit {
     return Object.values(bySeverity).reduce((sum, count) => sum + count, 0);
   });
 
-  ngOnInit(): void {
-    // No org-switcher built yet -- takes the first organization the
-    // current user is a member of. Once org-switcher exists, this
-    // becomes a signal driven by that selection instead.
-    this.orgService.list().subscribe({
-      next: (page) => {
-        const org = page.results[0] ?? null;
-        this.organization.set(org);
-        if (org) {
-          this.loadOrgData(org.id);
-        } else {
-          this.isLoading.set(false);
-        }
-      },
-      error: () => {
-        this.errorMessage.set('Could not load organizations.');
-        this.isLoading.set(false);
-      },
+
+  constructor() {
+    effect(() => {
+      const org = this.orgContext.selectedOrganization();
+      if (org) {
+        this.loadOrgData(org.id);
+      }
     });
   }
 
+  ngOnInit(): void {
+    
+  }
+
   private loadOrgData(orgId: string): void {
+    this.isLoading.set(true);
+    this.errorMessage.set(null);
+
     this.orgService.riskSummary(orgId).subscribe({
       next: (summary) => this.riskSummary.set(summary),
       error: () => this.errorMessage.set('Could not load risk summary.'),
@@ -59,17 +57,15 @@ export class Dashboard implements OnInit {
       next: (page) => this.assetCount.set(page.count),
     });
 
-    this.findingService
-      .list({ is_active: true })
-      .subscribe({
-        next: (page) => {
-          this.recentFindings.set(page.results.slice(0, 5));
-          this.isLoading.set(false);
-        },
-        error: () => {
-          this.errorMessage.set('Could not load findings.');
-          this.isLoading.set(false);
-        },
-      });
+    this.findingService.list({ is_active: true }).subscribe({
+      next: (page) => {
+        this.recentFindings.set(page.results.slice(0, 5));
+        this.isLoading.set(false);
+      },
+      error: () => {
+        this.errorMessage.set('Could not load findings.');
+        this.isLoading.set(false);
+      },
+    });
   }
 }

@@ -1,3 +1,4 @@
+from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
@@ -5,7 +6,8 @@ from .views import (
     FindingViewSet,
     OrganizationViewSet,
     ScanJobViewSet,
-    NotificationRuleViewSet
+    NotificationRuleViewSet,
+    ScannerListView
 )
 
 router = DefaultRouter()
@@ -15,4 +17,6 @@ router.register("scan-jobs", ScanJobViewSet, basename="scanjob")
 router.register("findings", FindingViewSet, basename="finding")
 router.register("notification-rules", NotificationRuleViewSet, basename="notificationrule")
 
-urlpatterns = router.urls
+urlpatterns = [
+    path("scanners/", ScannerListView.as_view(), name="scanner-list"),
+] + router.urls

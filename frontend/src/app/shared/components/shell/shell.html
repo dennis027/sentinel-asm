@@ -1,14 +1,77 @@
 <div class="shell">
   <nav class="sidebar">
-    <a routerLink="/dashboard" class="brand" title="Sentinel ASM">S</a>
-    <a routerLink="/dashboard" routerLinkActive="active" class="nav-link" title="Dashboard">Dash</a>
-    <a routerLink="/assets" routerLinkActive="active" class="nav-link" title="Assets">Asset</a>
-    <a routerLink="/scanners" routerLinkActive="active" class="nav-link" title="Scanners">Scan</a>
-    <a routerLink="/findings" routerLinkActive="active" class="nav-link" title="Findings">Find</a>
-    <a routerLink="/notification-rules" routerLinkActive="active" class="nav-link" title="Notifications">Notif</a>
-    <button class="nav-link signout" (click)="auth.logout()" title="Sign out">Exit</button>
+    <a routerLink="/dashboard" class="brand" title="Sentinel ASM">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </a>
+
+    <a routerLink="/dashboard" routerLinkActive="active" class="nav-link" title="Dashboard">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/>
+        <rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>
+      </svg>
+      <span>Dashboard</span>
+    </a>
+
+    <a routerLink="/assets" routerLinkActive="active" class="nav-link" title="Assets">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/>
+        <circle cx="7" cy="7" r="0.5" fill="currentColor"/><circle cx="7" cy="17" r="0.5" fill="currentColor"/>
+      </svg>
+      <span>Assets</span>
+    </a>
+
+    <a routerLink="/scanners" routerLinkActive="active" class="nav-link" title="Scanners">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.5" fill="currentColor"/>
+      </svg>
+      <span>Scanners</span>
+    </a>
+
+    <a routerLink="/findings" routerLinkActive="active" class="nav-link" title="Findings">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 3 2 20h20L12 3Z" stroke-linejoin="round"/><path d="M12 10v4" stroke-linecap="round"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/>
+      </svg>
+      <span>Findings</span>
+    </a>
+
+    <a routerLink="/notification-rules" routerLinkActive="active" class="nav-link" title="Notifications">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 8a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" stroke-linejoin="round"/><path d="M10 20a2 2 0 0 0 4 0" stroke-linecap="round"/>
+      </svg>
+      <span>Notifications</span>
+    </a>
+
+    <button class="nav-link signout" (click)="auth.logout()" title="Sign out">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M16 17l5-5-5-5M21 12H9" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Sign out</span>
+    </button>
   </nav>
-  <main class="content">
-    <router-outlet />
-  </main>
+
+  <div class="main">
+    <div class="topbar">
+      @if (orgContext.allOrganizations().length > 0) {
+        <select
+          class="org-switcher"
+          [ngModel]="orgContext.selectedOrganization()?.id"
+          (ngModelChange)="onOrgChange($event)"
+        >
+          @for (org of orgContext.allOrganizations(); track org.id) {
+            <option [value]="org.id">{{ org.name }}</option>
+          }
+        </select>
+      }
+      <div class="user-chip">
+        <span class="avatar">{{ (auth.currentUsername() ?? '?').charAt(0).toUpperCase() }}</span>
+        <span class="username">{{ auth.currentUsername() }}</span>
+      </div>
+    </div>
+    <main class="content">
+      <router-outlet />
+    </main>
+  </div>
 </div>

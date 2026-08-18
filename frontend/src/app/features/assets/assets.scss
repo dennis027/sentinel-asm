@@ -1,90 +1,85 @@
 .page {
-  padding: 24px;
+  padding: var(--space-6);
+  max-width: 1100px;
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: 22px;
+  font-weight: 600;
 }
 
 .controls {
   display: flex;
-  gap: 8px;
-}
-
-input,
-select {
-  height: 32px;
-  font-size: 13px;
-  border: 1px solid #d0d3d9;
-  border-radius: 6px;
-  padding: 0 10px;
+  gap: var(--space-2);
 }
 
 input {
-  width: 200px;
+  width: 220px;
 }
 
 .muted {
-  color: #6b7280;
+  color: var(--color-text-secondary);
   font-size: 13px;
   margin: 0;
 }
 
 .error {
-  color: #b42318;
+  color: var(--color-danger);
   font-size: 13px;
 }
 
 .count {
-  margin-top: 10px;
+  margin-top: var(--space-3);
 }
 
 table {
   width: 100%;
   font-size: 13px;
-  border-collapse: collapse;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 th {
   text-align: left;
-  font-weight: 400;
-  color: #9ca3af;
-  padding: 6px 8px 8px 0;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  padding: var(--space-3) var(--space-3);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--color-surface-alt);
+  border-bottom: 1px solid var(--color-border);
 }
 
 td {
-  padding: 10px 8px 10px 0;
-  border-top: 1px solid #e4e6eb;
+  padding: var(--space-3);
+  border-top: 1px solid var(--color-border);
 }
+
+tr:first-child td { border-top: none; }
+tbody tr:hover td { background: var(--color-surface-alt); }
 
 .badge {
   font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 6px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
   white-space: nowrap;
 
-  &.grade-A\+, &.grade-A {
-    background: #d1f4e0;
-    color: #067647;
-  }
-
-  &.grade-B, &.grade-C {
-    background: #fdf6d0;
-    color: #854d0e;
-  }
-
-  &.grade-D, &.grade-F {
-    background: #fde2e2;
-    color: #b42318;
-  }
+  &.grade-A\+, &.grade-A { background: var(--color-success-bg); color: var(--color-success); }
+  &.grade-B, &.grade-C { background: var(--color-warning-bg); color: var(--color-warning); }
+  &.grade-D, &.grade-F { background: var(--color-danger-bg); color: var(--color-danger); }
 }
