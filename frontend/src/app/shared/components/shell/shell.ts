@@ -1,5 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { OrganizationContextService } from '../../../core/services/organization-context-service';
 import { FormsModule } from '@angular/forms';
@@ -13,6 +13,7 @@ import { FormsModule } from '@angular/forms';
 export class Shell implements OnInit {
   protected readonly auth = inject(AuthService);
   protected readonly orgContext = inject(OrganizationContextService);
+  private readonly router = inject(Router);
 
   ngOnInit(): void {
     this.orgContext.loadOrganizations();
@@ -20,5 +21,9 @@ export class Shell implements OnInit {
 
   onOrgChange(orgId: string): void {
     this.orgContext.selectOrganization(orgId);
+  }
+
+  goToAccountSettings(): void {
+    this.router.navigate(['/account-settings']);
   }
 }

@@ -72,7 +72,7 @@
           }
         </select>
       }
-      <div class="user-chip">
+      <div class="user-chip" (click)="goToAccountSettings()" role="button" tabindex="0">
         <span class="avatar">{{ (auth.currentUsername() ?? '?').charAt(0).toUpperCase() }}</span>
         <span class="username">{{ auth.currentUsername() }}</span>
       </div>
