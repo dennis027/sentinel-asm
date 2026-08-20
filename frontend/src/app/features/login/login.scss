@@ -63,3 +63,12 @@ button {
   color: var(--color-danger);
   margin: calc(var(--space-4) * -1 + 6px) 0 var(--space-4);
 }
+
+.info {
+  font-size: 12px;
+  color: var(--color-accent);
+  background: var(--color-accent-bg);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin: 0 0 var(--space-4);
+}

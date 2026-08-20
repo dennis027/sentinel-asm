@@ -6,6 +6,9 @@
 
     <h1>Sign in</h1>
     <p class="subtitle">Monitor your attack surface.</p>
+    @if (infoMessage()) {
+        <p class="info">{{ infoMessage() }}</p>
+    }
 
     <form (ngSubmit)="submit()">
       <label for="username">Username</label>

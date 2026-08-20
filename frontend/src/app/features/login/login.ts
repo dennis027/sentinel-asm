@@ -18,6 +18,10 @@ export class Login {
   readonly password = signal('');
   readonly isSubmitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
+  
+  readonly infoMessage = signal<string | null>(
+    this.route.snapshot.queryParamMap.get('message'),
+  );
 
   submit(): void {
     if (!this.username() || !this.password() || this.isSubmitting()) return;
