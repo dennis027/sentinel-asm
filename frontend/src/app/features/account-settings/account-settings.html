@@ -1,0 +1,46 @@
+<div class="page">
+  <h1>Account settings</h1>
+  <p class="muted">Change your password. This will sign you out of all other sessions.</p>
+
+  <div class="panel">
+    <form (ngSubmit)="submit()">
+      <label for="current">Current password</label>
+      <input
+        id="current"
+        type="password"
+        autocomplete="current-password"
+        [ngModel]="currentPassword()"
+        (ngModelChange)="currentPassword.set($event)"
+        name="current"
+      />
+
+      <label for="new">New password</label>
+      <input
+        id="new"
+        type="password"
+        autocomplete="new-password"
+        [ngModel]="newPassword()"
+        (ngModelChange)="newPassword.set($event)"
+        name="new"
+      />
+
+      <label for="confirm">Confirm new password</label>
+      <input
+        id="confirm"
+        type="password"
+        autocomplete="new-password"
+        [ngModel]="confirmPassword()"
+        (ngModelChange)="confirmPassword.set($event)"
+        name="confirm"
+      />
+
+      @if (errorMessage()) {
+        <p class="error">{{ errorMessage() }}</p>
+      }
+
+      <button type="submit" [disabled]="isSubmitting()">
+        {{ isSubmitting() ? 'Changing…' : 'Change password' }}
+      </button>
+    </form>
+  </div>
+</div>
