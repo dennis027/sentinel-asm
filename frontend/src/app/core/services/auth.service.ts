@@ -71,6 +71,13 @@ export class AuthService {
       );
   }
 
+  changePassword(currentPassword: string, newPassword: string): Observable<{ detail: string }> {
+    return this.http.post<{ detail: string }>(
+      `${environment.apiBaseUrl}/auth/change-password/`,
+      { current_password: currentPassword, new_password: newPassword },
+    );
+  }
+
   hasRefreshToken(): boolean {
     return this.refreshToken() !== null;
   }
@@ -97,4 +104,6 @@ export class AuthService {
     localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
     localStorage.setItem(USERNAME_KEY, username);
   }
+
+
 }
