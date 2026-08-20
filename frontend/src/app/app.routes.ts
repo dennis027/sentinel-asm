@@ -37,6 +37,11 @@ export const routes: Routes = [
         path: 'scan-history',
         loadComponent: () => import('./features/scan-history/scan-history').then((m) => m.ScanHistory),
       },
+      {
+        path: 'account-settings',
+        loadComponent: () =>
+          import('./features/account-settings/account-settings').then((m) => m.AccountSettings),
+      },
     ],
   },
 ];
