@@ -1,5 +1,16 @@
 from django.contrib import admin
-from .models import AuthEvent
+from .models import ActivityEvent, AuthEvent
+
+
+@admin.register(ActivityEvent)
+class ActivityEventAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "organization", "actor_name", "verb", "summary")
+    list_filter = ("verb",)
+    search_fields = ("summary", "actor_name", "organization__name")
+    readonly_fields = [f.name for f in ActivityEvent._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(AuthEvent)
