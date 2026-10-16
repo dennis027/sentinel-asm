@@ -1,0 +1,133 @@
+<div class="page">
+  <div class="header">
+    <div>
+      <h1>Screenshots</h1>
+      <p class="muted">
+        What each site looked like the last time it was captured: the home page and the pages it
+        links to.
+      </p>
+    </div>
+  </div>
+
+  <div class="controls">
+    <input
+      type="search"
+      placeholder="Search by page title or host"
+      aria-label="Search screenshots by page title or host"
+      [ngModel]="searchTerm()"
+      (ngModelChange)="onSearchChange($event)"
+    />
+  </div>
+
+  @if (isLoading()) {
+    <p class="loading">Loading…</p>
+  } @else if (errorMessage()) {
+    <p class="error" role="alert">{{ errorMessage() }}</p>
+  } @else if (shots().length === 0) {
+    @if (searchTerm()) {
+      <app-empty-state art="search" title="No screenshots match">
+        Try a different page title or host.
+      </app-empty-state>
+    } @else {
+      <app-empty-state art="radar" title="No screenshots yet">
+        Run the Screenshot scanner from the <a routerLink="/scanners">Scanners</a> page.
+      </app-empty-state>
+    }
+  } @else {
+    <p class="muted count">{{ totalCount() | plural: 'screenshot' }}</p>
+    <ul class="gallery">
+      @for (shot of shots(); track shot.id) {
+        <li>
+          <button
+            class="tile"
+            (click)="viewing.set(shot)"
+            [attr.aria-label]="'Open screenshot of ' + urlOf(shot)"
+          >
+            <span class="frame">
+              @if (imageUrls()[shot.id]; as url) {
+                <img [src]="url" alt="" loading="lazy" />
+              } @else {
+                <app-icon name="camera" [size]="22" />
+              }
+            </span>
+            <span class="tile-title">{{ titleOf(shot) }}</span>
+            <span class="tile-url">{{ urlOf(shot) }}</span>
+          </button>
+        </li>
+      }
+    </ul>
+    <app-pager
+      [page]="page()"
+      [count]="totalCount()"
+      [pageSize]="pageSize"
+      (pageChange)="onPageChange($event)"
+    />
+  }
+
+  @if (viewing(); as shot) {
+    <!-- Clicking the dimmed area closes it; Escape does too (see component). -->
+    <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->
+    <div class="backdrop" (click)="close()">
+      <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events -->
+      <div
+        class="viewer"
+        role="dialog"
+        aria-modal="true"
+        [attr.aria-label]="titleOf(shot)"
+        (click)="$event.stopPropagation()"
+      >
+        <div class="viewer-head">
+          <div class="viewer-text">
+            <p class="viewer-title">{{ titleOf(shot) }}</p>
+            <p class="muted">
+              {{ urlOf(shot) }} · captured {{ shot.last_seen | date: 'MMM d, y, h:mm a' }}
+            </p>
+          </div>
+          <a
+            class="btn secondary small"
+            routerLink="/findings"
+            [queryParams]="{ asset: shot.asset, assetName: shot.asset_value }"
+            >Findings for this host</a
+          >
+          @if (totalCount() > 1) {
+            <span class="viewer-position muted" aria-live="polite">
+              {{ viewingPosition() }} of {{ totalCount() }}
+            </span>
+          }
+          <button class="btn secondary small" (click)="close()" aria-label="Close">
+            <app-icon name="x" [size]="14" />
+          </button>
+        </div>
+        <div class="stage">
+          @if (imageUrls()[shot.id]; as url) {
+            <img class="full" [src]="url" [alt]="'Screenshot of ' + urlOf(shot)" />
+          } @else if (missingImages().has(shot.id)) {
+            <p class="muted missing">The image for this screenshot is no longer available.</p>
+          } @else {
+            <p class="muted missing">Loading…</p>
+          }
+          @if (totalCount() > 1) {
+            <button
+              class="nav prev"
+              (click)="showPrevious()"
+              [disabled]="!hasPrevious() || isLoading()"
+              aria-label="Previous screenshot"
+              title="Previous (←)"
+            >
+              <app-icon name="chevron-left" [size]="22" />
+            </button>
+            <button
+              class="nav next"
+              (click)="showNext()"
+              [disabled]="!hasNext() || isLoading()"
+              aria-label="Next screenshot"
+              title="Next (→)"
+            >
+              <app-icon name="chevron-right" [size]="22" />
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

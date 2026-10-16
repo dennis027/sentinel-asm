@@ -1,0 +1,178 @@
+<div class="page">
+  <a class="back" routerLink="/assets"><app-icon name="arrow-left" [size]="14" /> Assets</a>
+
+  @if (isLoading()) {
+    <p class="loading">Loading…</p>
+  } @else if (errorMessage()) {
+    <p class="error" role="alert">{{ errorMessage() }}</p>
+  } @else if (asset(); as a) {
+    <div class="header">
+      <div class="title-block">
+        <h1>{{ a.value }}</h1>
+        <p class="badges">
+          <span class="badge grade-{{ a.risk_grade }}" title="Score {{ a.risk_score }} of 100">Grade {{ a.risk_grade }}</span>
+          <span class="badge" [class.jewel]="a.criticality === 'crown_jewel' || a.criticality === 'high'" title="Importance to the business">
+            @if (a.criticality === 'crown_jewel') {
+              <app-icon name="gem" [size]="12" />
+            }
+            {{ criticalityLabel(a.criticality) }}{{ a.criticality === 'crown_jewel' ? '' : ' importance' }}
+          </span>
+          @for (tag of a.tags; track tag) {
+            <a class="badge tag" routerLink="/assets" [queryParams]="{ tag: tag }"><app-icon name="tag" [size]="11" /> {{ tag }}</a>
+          }
+          @if (a.out_of_scope) {
+            <span class="badge tone-serious" title="On the organization's never-scan list">Out of scope</span>
+          }
+          @if (a.source === 'manual') {
+            <span class="badge">Added manually</span>
+          }
+        </p>
+        <p class="muted small">First seen {{ a.first_seen | date: 'mediumDate' }} · last seen {{ a.last_seen | date: 'medium' }}</p>
+      </div>
+      @if (orgContext.canTriggerScans() && orgContext.selectedOrganization()?.scans_allowed && !a.out_of_scope) {
+        <button class="btn" (click)="rescan()" [disabled]="isRescanning()"
+                title="Run every host-level check again, for example to confirm a fix">
+          <app-icon name="play" [size]="14" /> {{ isRescanning() ? 'Starting…' : 'Re-check this host' }}
+        </button>
+      }
+    </div>
+
+    <div class="counts">
+      @for (s of severities; track s) {
+        <div class="count">
+          <span class="number">{{ bySeverity()[s] || 0 }}</span>
+          <span class="badge severity-{{ s }}">{{ s }}</span>
+        </div>
+      }
+    </div>
+
+    <div class="grid">
+      <div class="col">
+        <div class="panel">
+          <p class="panel-title">
+            Open issues
+            <a class="more" routerLink="/findings" [queryParams]="{ asset: a.id, assetName: a.value }">All findings</a>
+          </p>
+          @if (openIssues().length === 0) {
+            <p class="muted">No open issues on this host.</p>
+          } @else {
+            <ul class="rows">
+              @for (f of openIssues(); track f.id) {
+                <li>
+                  <span class="badge severity-{{ f.severity }}">{{ f.severity }}</span>
+                  <a [routerLink]="['/findings', f.id]">{{ f.title }}</a>
+                  @if (f.overdue) {
+                    <span class="badge tone-danger">Overdue</span>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </div>
+
+        <div class="panel">
+          <p class="panel-title">Open ports</p>
+          @if (ports().length === 0) {
+            <p class="muted">No open ports recorded. The port scan finds them.</p>
+          } @else {
+            <table>
+              <tbody>
+                @for (p of ports(); track p.finding.id) {
+                  <tr>
+                    <td class="port">{{ p.port }}</td>
+                    <td>{{ p.service }} <span class="muted">{{ p.product }}</span></td>
+                    <td class="right"><span class="badge severity-{{ p.finding.severity }}">{{ p.finding.severity }}</span></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+
+        <div class="panel">
+          <p class="panel-title">Recent scans</p>
+          @if (scans().length === 0) {
+            <p class="muted">Not scanned yet.</p>
+          } @else {
+            <table>
+              <tbody>
+                @for (job of scans(); track job.id) {
+                  <tr>
+                    <td>{{ scannerLabels()[job.scanner_name] || job.scanner_name }}</td>
+                    <td><span class="badge status-{{ job.status }}">{{ job.status }}</span></td>
+                    <td class="right muted">{{ job.created_at | date: 'MMM d, h:mm a' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+      </div>
+
+      <div class="col">
+        @if (screenshotUrl(); as url) {
+          <div class="panel shot">
+            <img [src]="url" [alt]="'Screenshot of ' + a.value" />
+          </div>
+        }
+
+        @if (orgContext.canTriageFindings()) {
+          <form class="panel context" (ngSubmit)="save()">
+            <p class="panel-title">Business context</p>
+            <label for="criticality">How much it matters</label>
+            <select id="criticality" name="criticality" [ngModel]="editCriticality()" (ngModelChange)="editCriticality.set($event)">
+              @for (c of criticalities; track c.value) {
+                <option [value]="c.value">{{ c.label }}</option>
+              }
+            </select>
+            <p class="hint">{{ criticalityHint() }}</p>
+            <label for="tags">Labels</label>
+            <input id="tags" name="tags" placeholder="payments, production" [ngModel]="editTags()" (ngModelChange)="editTags.set($event)" />
+            <p class="hint">Separate with commas. Issues on crown jewels go to the top of the fix plan.</p>
+            <button class="btn small" type="submit" [disabled]="isSaving()">{{ isSaving() ? 'Saving…' : 'Save' }}</button>
+          </form>
+        }
+
+        <div class="panel">
+          <p class="panel-title">Certificate</p>
+          @if (certificate(); as c) {
+            @if (c.notAfter) {
+              <p [class.late]="c.days < 30">
+                Valid until {{ c.notAfter | date: 'mediumDate' }}
+                ({{ c.days < 0 ? 'expired ' + -c.days + ' days ago' : c.days + ' days left' }})
+              </p>
+            } @else {
+              <p>{{ c.finding.title }}</p>
+            }
+          } @else {
+            <p class="muted">No certificate recorded.</p>
+          }
+        </div>
+
+        <div class="panel">
+          <p class="panel-title">Software</p>
+          @if (a.technologies.length === 0) {
+            <p class="muted">Nothing identified.</p>
+          } @else {
+            <div class="chips">
+              @for (t of a.technologies; track t.id) {
+                <span class="chip">{{ t.name }}{{ t.version ? ' ' + t.version : '' }}</span>
+              }
+            </div>
+          }
+        </div>
+
+        @if (dnsRecords().length) {
+          <div class="panel">
+            <p class="panel-title">DNS records</p>
+            <ul class="rows plain">
+              @for (r of dnsRecords(); track r.id) {
+                <li>{{ r.title }}</li>
+              }
+            </ul>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

@@ -1,56 +1,176 @@
 <div class="page">
   <div class="header">
-    <h1>Assets</h1>
-    <div class="controls">
+    <div>
+      <h1>Assets</h1>
+      <p class="muted">Every host found under {{ orgContext.selectedOrganization()?.root_domain }}.</p>
+    </div>
+    @if (orgContext.canTriggerScans() && !isAdding() && !isImporting()) {
+      <div class="header-actions">
+        <button class="btn secondary" (click)="startImport()"><app-icon name="upload" [size]="14" /> Import list</button>
+        <button class="btn" (click)="startAdding()"><app-icon name="plus" [size]="14" /> Add asset</button>
+      </div>
+    }
+  </div>
+
+  @if (isAdding()) {
+    <form class="panel add-asset" (ngSubmit)="addAsset()">
+      <label for="new-host">Host to monitor</label>
+      <div class="add-row">
+        <input
+          id="new-host"
+          name="host"
+          autocapitalize="off"
+          spellcheck="false"
+          [placeholder]="'vpn.' + (orgContext.selectedOrganization()?.root_domain ?? 'example.com')"
+          [ngModel]="newHost()"
+          (ngModelChange)="newHost.set($event)"
+        />
+        <button class="btn" type="submit" [disabled]="isSaving() || !newHost().trim()">
+          {{ isSaving() ? 'Adding…' : 'Add asset' }}
+        </button>
+        <button class="btn secondary" type="button" (click)="isAdding.set(false)">Cancel</button>
+      </div>
+      <p class="hint">
+        For hosts discovery can't find, such as ones with no public DNS history. It must be
+        {{ orgContext.selectedOrganization()?.root_domain }} or a name under it.
+      </p>
+      @if (addError()) {
+        <p class="error" role="alert">{{ addError() }}</p>
+      }
+    </form>
+  }
+  @if (isImporting()) {
+    <form class="panel add-asset" (ngSubmit)="importHosts()">
+      <label for="import-hosts">Hosts to monitor</label>
+      <textarea
+        id="import-hosts"
+        name="hosts"
+        rows="6"
+        spellcheck="false"
+        [placeholder]="'One per line, or separated by commas:\nvpn.' + (orgContext.selectedOrganization()?.root_domain ?? 'example.com') + '\nmail.' + (orgContext.selectedOrganization()?.root_domain ?? 'example.com')"
+        [ngModel]="importText()"
+        (ngModelChange)="importText.set($event)"
+      ></textarea>
+      <p class="hint">Paste from a spreadsheet or a CMDB export. Up to 500 at a time; anything not under
+        {{ orgContext.selectedOrganization()?.root_domain }} is skipped and listed with the reason.</p>
+      <div class="add-row">
+        <button class="btn" type="submit" [disabled]="isSaving() || !importText().trim()">
+          {{ isSaving() ? 'Importing…' : 'Import' }}
+        </button>
+        <button class="btn secondary" type="button" (click)="isImporting.set(false)">Close</button>
+      </div>
+      @if (importResult(); as result) {
+        <p class="import-summary">
+          <strong>{{ result.added.length }} added</strong>, {{ result.skipped.length }} skipped.
+        </p>
+        @if (result.skipped.length) {
+          <ul class="skipped">
+            @for (s of result.skipped; track s.value) {
+              <li><code>{{ s.value }}</code> {{ s.reason }}</li>
+            }
+          </ul>
+        }
+      }
+    </form>
+  }
+
+  @if (tagFilter()) {
+    <p class="filter-chip">
+      Showing hosts labelled <strong>{{ tagFilter() }}</strong>
+      <button class="btn secondary small" (click)="clearTagFilter()">Show all</button>
+    </p>
+  }
+  <div class="controls">
       <input
         type="text"
         placeholder="Search assets"
+        aria-label="Search assets"
         [ngModel]="searchTerm()"
         (ngModelChange)="onSearchChange($event)"
       />
-      <select [ngModel]="assetTypeFilter()" (ngModelChange)="onTypeFilterChange($event)">
+      <select
+        aria-label="Filter by type"
+        [ngModel]="assetTypeFilter()"
+        (ngModelChange)="onTypeFilterChange($event)"
+      >
         <option value="">All types</option>
         <option value="domain">Domain</option>
         <option value="subdomain">Subdomain</option>
         <option value="ip">IP</option>
         <option value="url">URL</option>
       </select>
-    </div>
+      <select
+        aria-label="Filter by importance"
+        [ngModel]="criticalityFilter()"
+        (ngModelChange)="onCriticalityChange($event)"
+      >
+        <option value="">Any importance</option>
+        @for (c of criticalities; track c.value) {
+          <option [value]="c.value">{{ c.label }}</option>
+        }
+      </select>
   </div>
 
   @if (isLoading()) {
-    <p class="muted">Loading…</p>
+    <p class="loading">Loading…</p>
   } @else if (errorMessage()) {
     <p class="error">{{ errorMessage() }}</p>
   } @else if (assets().length === 0) {
-    <p class="muted">No assets match these filters.</p>
+    @if (searchTerm() || assetTypeFilter() || criticalityFilter() || tagFilter()) {
+      <app-empty-state art="search" title="No assets match">
+        Try a different search or type.
+      </app-empty-state>
+    } @else {
+      <app-empty-state art="servers" title="No assets yet">
+        Run <a routerLink="/scanners">Subdomain discovery</a> to find the hosts under your domain.
+      </app-empty-state>
+    }
   } @else {
     <table>
       <thead>
         <tr>
           <th>Asset</th>
-          <th>Type</th>
+          <th>Importance</th>
           <th>Technologies</th>
-          <th>Risk</th>
+          <th title="A+ is best, F is worst. Based on open findings.">Risk</th>
           <th>Last seen</th>
         </tr>
       </thead>
       <tbody>
         @for (asset of assets(); track asset.id) {
           <tr>
-            <td>{{ asset.value }}</td>
-            <td class="muted">{{ asset.asset_type }}</td>
+            <td>
+              <a [routerLink]="['/assets', asset.id]" title="Everything about {{ asset.value }}">{{ asset.value }}</a>
+              @if (asset.source === 'manual') {
+                <span class="badge manual" title="Added by hand rather than discovered">Added manually</span>
+              }
+              @if (asset.out_of_scope) {
+                <span class="badge tone-serious manual" title="On the never-scan list">Out of scope</span>
+              }
+              @for (tag of asset.tags; track tag) {
+                <a class="badge tag" [routerLink]="[]" [queryParams]="{ tag: tag }">{{ tag }}</a>
+              }
+            </td>
+            <td>
+              <span class="importance importance-{{ asset.criticality }}">
+                @if (asset.criticality === 'crown_jewel') {
+                  <app-icon name="gem" [size]="12" />
+                }
+                {{ criticalityLabel(asset.criticality) }}
+              </span>
+            </td>
             <td class="muted">
               {{ asset.technologies.length ? techNames(asset) : '—' }}
             </td>
             <td>
               <span class="badge grade-{{ asset.risk_grade }}">{{ asset.risk_grade }}</span>
             </td>
-            <td class="muted">{{ asset.last_seen | date: 'short' }}</td>
+            <td class="muted">{{ asset.last_seen | date: 'MMM d, h:mm a' }}</td>
           </tr>
         }
       </tbody>
     </table>
-    <p class="muted count">{{ totalCount() }} asset(s) total</p>
+    <p class="muted count">{{ totalCount() | plural: 'asset' }} in total</p>
+    <app-pager [page]="page()" [count]="totalCount()" (pageChange)="onPageChange($event)" />
   }
 </div>

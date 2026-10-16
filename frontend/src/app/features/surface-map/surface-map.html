@@ -1,0 +1,83 @@
+<div class="page">
+  <div class="header">
+    <div>
+      <h1>Attack surface</h1>
+      <p class="muted">
+        Everything {{ orgContext.selectedOrganization()?.name }} exposes to the internet, as an attacker
+        would map it. The closer and larger a host, the more open issues it has.
+      </p>
+    </div>
+  </div>
+
+  @if (isLoading()) {
+    <p class="loading">Loading…</p>
+  } @else if (map(); as m) {
+    <div class="stats">
+      <div><span class="stat">{{ m.total_assets | number }}</span> hosts found</div>
+      <div><span class="stat bad">{{ m.assets_at_risk | number }}</span> with open issues</div>
+      @if (m.hidden) {
+        <div class="muted">{{ m.hidden | number }} more clean hosts not drawn</div>
+      }
+    </div>
+
+    <div class="panel map-panel">
+      <div class="map">
+        <svg [attr.viewBox]="'0 0 ' + size + ' ' + size" role="img" [attr.aria-label]="'Map of ' + m.total_assets + ' hosts under ' + m.root_domain">
+          <circle class="ring" [attr.cx]="center" [attr.cy]="center" r="130" />
+          <circle class="ring" [attr.cx]="center" [attr.cy]="center" r="205" />
+          <circle class="ring" [attr.cx]="center" [attr.cy]="center" r="265" />
+
+          @for (node of nodes(); track node.id) {
+            @if (!node.clean) {
+              <line class="link" [attr.x1]="center" [attr.y1]="center" [attr.x2]="node.x" [attr.y2]="node.y" />
+            }
+          }
+
+          <circle class="core" [attr.cx]="center" [attr.cy]="center" r="34" />
+          <text class="core-label" [attr.x]="center" [attr.y]="center + 52" text-anchor="middle">{{ m.root_domain }}</text>
+
+          @for (node of nodes(); track node.id) {
+            <circle
+              class="node {{ node.tone }}"
+              [class.active]="hovered()?.id === node.id"
+              [attr.cx]="node.x"
+              [attr.cy]="node.y"
+              [attr.r]="node.r"
+              tabindex="0"
+              role="link"
+              [attr.aria-label]="node.value + ', grade ' + node.risk_grade + ', ' + node.open_findings + ' open issues'"
+              (mouseenter)="hovered.set(node)"
+              (mouseleave)="hovered.set(null)"
+              (focus)="hovered.set(node)"
+              (blur)="hovered.set(null)"
+              (click)="open(node)"
+              (keydown.enter)="open(node)"
+            />
+          }
+        </svg>
+
+        @if (hovered(); as node) {
+          <div class="tooltip" [style.left.%]="(node.x / size) * 100" [style.top.%]="(node.y / size) * 100">
+            <strong>{{ node.value }}</strong>
+            @if (node.clean) {
+              <span>No open issues</span>
+            } @else {
+              <span>Grade {{ node.risk_grade }} · {{ node.open_findings | plural: 'open issue' }}</span>
+              @if (node.critical_high) {
+                <span>{{ node.critical_high }} critical or high</span>
+              }
+            }
+            <span class="hint">Click to see its findings</span>
+          </div>
+        }
+      </div>
+
+      <ul class="legend">
+        @for (item of legend; track item.tone) {
+          <li><span class="swatch {{ item.tone }}"></span>{{ item.label }}</li>
+        }
+        <li><span class="swatch size"></span>Bigger = more open issues</li>
+      </ul>
+    </div>
+  }
+</div>

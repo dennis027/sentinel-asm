@@ -1,86 +1,73 @@
-import { Component, DestroyRef, OnDestroy, effect, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { Asset, AssetType } from '../../core/models/models';
-import { AssetService } from '../../core/services/asset-service';
+import { HttpTestingController } from '@angular/common/http/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { environment } from '../../../environments/environment';
 import { OrganizationContextService } from '../../core/services/organization-context-service';
+import { makeOrganization, page, provideAppTesting } from '../../testing/test-helpers';
 
-const SEARCH_DEBOUNCE_MS = 300;
+import { Assets } from './assets';
 
-@Component({
-  selector: 'app-assets',
-  imports: [FormsModule, DatePipe],
-  templateUrl: './assets.html',
-  styleUrl: './assets.scss',
-})
-export class Assets implements OnDestroy {
-  private readonly assetService = inject(AssetService);
-  protected readonly orgContext = inject(OrganizationContextService);
-  private searchDebounceHandle: ReturnType<typeof setTimeout> | undefined;
+const API = environment.apiBaseUrl;
 
-  readonly assets = signal<Asset[]>([]);
-  readonly totalCount = signal(0);
-  readonly isLoading = signal(true);
-  readonly errorMessage = signal<string | null>(null);
+describe('Assets', () => {
+  let fixture: ComponentFixture<Assets>;
+  let http: HttpTestingController;
 
-  readonly searchTerm = signal('');
-  readonly assetTypeFilter = signal<AssetType | ''>('');
+  beforeEach(async () => {
+    localStorage.clear();
+    await TestBed.configureTestingModule({
+      imports: [Assets],
+      providers: [provideAppTesting()],
+    }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
 
-  constructor() {
-    // Refetches whenever the selected org changes, on top of the
-    // search/type filters already triggering their own refetch --
-    // this is what makes the org switcher actually affect this page.
-    effect(() => {
-      const org = this.orgContext.selectedOrganization();
-      if (org) {
-        this.fetchAssets(org.id);
-      }
-    });
-  }
+    TestBed.inject(OrganizationContextService).loadOrganizations();
+    http
+      .expectOne((r) => r.url === `${API}/organizations/`)
+      .flush(page([makeOrganization({ id: 'org-1' }), makeOrganization({ id: 'org-2' })]));
 
-  ngOnDestroy(): void {
-    clearTimeout(this.searchDebounceHandle);
-  }
+    fixture = TestBed.createComponent(Assets);
+    fixture.detectChanges();
+  });
 
-  techNames(asset: Asset): string {
-    return asset.technologies.map((t) => t.name).join(', ');
-  }
+  afterEach(() => http.verify());
 
-  onSearchChange(value: string): void {
-    this.searchTerm.set(value);
-    clearTimeout(this.searchDebounceHandle);
-    this.searchDebounceHandle = setTimeout(() => {
-      const org = this.orgContext.selectedOrganization();
-      if (org) this.fetchAssets(org.id);
-    }, SEARCH_DEBOUNCE_MS);
-  }
+  it('lists only the selected organization\'s assets', () => {
+    const request = http.expectOne((r) => r.url === `${API}/assets/`);
+    expect(request.request.params.get('organization')).toBe('org-1');
+    expect(request.request.params.get('page')).toBe('1');
+    request.flush(page([]));
+  });
 
-  onTypeFilterChange(value: string): void {
-    this.assetTypeFilter.set(value as AssetType | '');
-    const org = this.orgContext.selectedOrganization();
-    if (org) this.fetchAssets(org.id);
-  }
+  it('reloads from page 1 when the organization is switched', () => {
+    http.expectOne((r) => r.url === `${API}/assets/`).flush(page([], 60));
+    fixture.componentInstance.onPageChange(2);
+    http.expectOne((r) => r.params.get('page') === '2').flush(page([], 60));
 
-  private fetchAssets(orgId: string): void {
-    this.isLoading.set(true);
-    this.errorMessage.set(null);
+    TestBed.inject(OrganizationContextService).selectOrganization('org-2');
+    fixture.detectChanges();
 
-    this.assetService
-      .list({
-        organization: orgId,
-        search: this.searchTerm() || undefined,
-        asset_type: this.assetTypeFilter() || undefined,
-      })
-      .subscribe({
-        next: (page) => {
-          this.assets.set(page.results);
-          this.totalCount.set(page.count);
-          this.isLoading.set(false);
-        },
-        error: () => {
-          this.errorMessage.set('Could not load assets.');
-          this.isLoading.set(false);
-        },
-      });
-  }
-}
+    const request = http.expectOne((r) => r.url === `${API}/assets/`);
+    expect(request.request.params.get('organization')).toBe('org-2');
+    expect(request.request.params.get('page')).toBe('1');
+    request.flush(page([]));
+  });
+
+  it('adds a host by hand and shows the server\'s reason when it is refused', () => {
+    http.expectOne((r) => r.url === `${API}/assets/`).flush(page([]));
+    const component = fixture.componentInstance;
+    component.startAdding();
+    component.newHost.set('evil.com');
+    component.addAsset();
+    const refused = http.expectOne((r) => r.method === 'POST' && r.url === `${API}/assets/`);
+    expect(refused.request.body).toEqual({ organization: 'org-1', value: 'evil.com' });
+    refused.flush({ value: ['Assets must be acme.com or a name under it.'] }, { status: 400, statusText: 'Bad Request' });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.add-asset .error').textContent).toContain('must be acme.com');
+
+    component.newHost.set('vpn.acme.com');
+    component.addAsset();
+    http.expectOne((r) => r.method === 'POST' && r.url === `${API}/assets/`).flush({ id: 'a9', value: 'vpn.acme.com' });
+    http.expectOne((r) => r.method === 'GET' && r.url === `${API}/assets/`).flush(page([]));
+    expect(component.isAdding()).toBeFalse();
+  });
+});

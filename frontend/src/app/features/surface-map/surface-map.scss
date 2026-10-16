@@ -1,0 +1,86 @@
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin-bottom: var(--space-4);
+  align-items: baseline;
+}
+
+.stat { font-size: 26px; font-weight: 650; margin-right: 4px; }
+.stat.bad { color: var(--color-danger); }
+
+.map-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: var(--space-5);
+  align-items: center;
+}
+
+.map { position: relative; max-width: 640px; width: 100%; margin: 0 auto; }
+
+svg { display: block; width: 100%; height: auto; }
+
+.ring { fill: none; stroke: var(--color-border); stroke-dasharray: 3 5; }
+.link { stroke: var(--color-border-strong); stroke-width: 1; opacity: 0.6; }
+.core { fill: var(--color-accent); }
+.core-label { font-size: 13px; font-weight: 650; fill: var(--color-text-primary); }
+
+.node {
+  stroke: var(--color-surface);
+  stroke-width: 2;
+  cursor: pointer;
+  transition: r 0.15s ease, opacity 0.15s ease;
+
+  &.bad { fill: var(--meter-bad); }
+  &.serious { fill: var(--bar-high); }
+  &.warn { fill: var(--meter-warn); }
+  &.good { fill: var(--meter-good); opacity: 0.65; }
+  &.active, &:focus { stroke: var(--color-text-primary); outline: none; opacity: 1; }
+}
+
+.tooltip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 16px));
+  display: grid;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--toast-bg);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-md);
+  z-index: 2;
+
+  .hint { opacity: 0.7; }
+}
+
+.legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+  font-size: 13px;
+
+  li { display: flex; align-items: center; gap: var(--space-2); }
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+
+  &.bad { background: var(--meter-bad); }
+  &.serious { background: var(--bar-high); }
+  &.warn { background: var(--meter-warn); }
+  &.good { background: var(--meter-good); opacity: 0.65; }
+  &.size { width: 18px; height: 18px; border: 2px solid var(--color-text-muted); background: none; }
+}
+
+@media (max-width: 900px) {
+  .map-panel { grid-template-columns: 1fr; }
+  .legend { grid-template-columns: 1fr 1fr; }
+}

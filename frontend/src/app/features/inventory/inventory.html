@@ -1,0 +1,145 @@
+<div class="page">
+  <div class="header">
+    <div>
+      <h1>Inventory</h1>
+      <p class="muted">What {{ orgContext.selectedOrganization()?.name }} runs on the internet: software, open services and certificates.</p>
+    </div>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" [attr.aria-selected]="tab() === 'software'" [class.active]="tab() === 'software'" (click)="select('software')">
+      <app-icon name="package" [size]="15" /> Software <span class="n">{{ technologies().length }}</span>
+    </button>
+    <button role="tab" [attr.aria-selected]="tab() === 'services'" [class.active]="tab() === 'services'" (click)="select('services')">
+      <app-icon name="plug" [size]="15" /> Open services <span class="n">{{ services().length }}</span>
+    </button>
+    <button role="tab" [attr.aria-selected]="tab() === 'certificates'" [class.active]="tab() === 'certificates'" (click)="select('certificates')">
+      <app-icon name="lock" [size]="15" /> Certificates <span class="n">{{ certificates().length }}</span>
+      @if (expiringSoon()) {
+        <span class="n warn" title="Expired or expiring within 30 days">{{ expiringSoon() }} soon</span>
+      }
+    </button>
+  </div>
+
+  <div class="controls">
+    <input
+      type="search"
+      [placeholder]="tab() === 'software' ? 'Search software, e.g. nginx or WordPress' : tab() === 'services' ? 'Search port or service, e.g. 3389' : 'Search host'"
+      aria-label="Filter the inventory"
+      [ngModel]="filter()"
+      (ngModelChange)="filter.set($event)"
+    />
+  </div>
+
+  @if (isLoading()) {
+    <p class="loading">Loading…</p>
+  } @else if (errorMessage()) {
+    <p class="error" role="alert">{{ errorMessage() }}</p>
+  } @else {
+    @switch (tab()) {
+      @case ('software') {
+        @if (shownTechnologies().length === 0) {
+          <app-empty-state art="search" title="No software found">
+            Web fingerprinting fills this in. Run it from the <a routerLink="/scanners">Scanners</a> page.
+          </app-empty-state>
+        } @else {
+          <table>
+            <thead>
+              <tr><th>Software</th><th>Version</th><th>Kind</th><th>Runs on</th></tr>
+            </thead>
+            <tbody>
+              @for (t of shownTechnologies(); track t.name + t.version) {
+                <tr>
+                  <td class="strong">{{ t.name }}</td>
+                  <td>{{ t.version || '—' }}</td>
+                  <td class="muted">{{ t.category || '—' }}</td>
+                  <td>
+                    <div class="hosts">
+                      @for (h of (expanded().has('t' + t.name + t.version) ? t.hosts : t.hosts.slice(0, hostsShown)); track h.id) {
+                        <a [routerLink]="['/assets', h.id]">{{ h.value }}</a>
+                      }
+                      @if (t.host_count > hostsShown) {
+                        <button class="more" (click)="toggle('t' + t.name + t.version)">
+                          {{ expanded().has('t' + t.name + t.version) ? 'fewer' : '+' + (t.host_count - hostsShown) + ' more' }}
+                        </button>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      }
+      @case ('services') {
+        @if (shownServices().length === 0) {
+          <app-empty-state art="search" title="No open services found">
+            The port scan fills this in. Run it from the <a routerLink="/scanners">Scanners</a> page.
+          </app-empty-state>
+        } @else {
+          <table>
+            <thead>
+              <tr><th>Port</th><th>Service</th><th>Risk</th><th>Open on</th></tr>
+            </thead>
+            <tbody>
+              @for (s of shownServices(); track s.port + s.protocol) {
+                <tr>
+                  <td class="strong">{{ s.port }}/{{ s.protocol }}</td>
+                  <td>{{ s.service }}</td>
+                  <td><span class="badge severity-{{ s.severity }}">{{ s.severity }}</span></td>
+                  <td>
+                    <div class="hosts">
+                      @for (h of (expanded().has('s' + s.port) ? s.hosts : s.hosts.slice(0, hostsShown)); track h.finding) {
+                        <a [routerLink]="['/findings', h.finding]" [class.triaged]="h.status !== 'open'"
+                           [title]="h.product ? h.product : ''">{{ h.value }}</a>
+                      }
+                      @if (s.host_count > hostsShown) {
+                        <button class="more" (click)="toggle('s' + s.port)">
+                          {{ expanded().has('s' + s.port) ? 'fewer' : '+' + (s.host_count - hostsShown) + ' more' }}
+                        </button>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      }
+      @case ('certificates') {
+        @if (shownCertificates().length === 0) {
+          <app-empty-state art="search" title="No certificates found">
+            The TLS certificate check fills this in. Run it from the <a routerLink="/scanners">Scanners</a> page.
+          </app-empty-state>
+        } @else {
+          <table>
+            <thead>
+              <tr><th>Host</th><th>Expires</th><th>Time left</th><th></th></tr>
+            </thead>
+            <tbody>
+              @for (c of shownCertificates(); track c.finding) {
+                <tr>
+                  <td><a [routerLink]="['/assets', c.asset]">{{ c.asset_value }}</a></td>
+                  <td>{{ c.not_after | date: 'mediumDate' }}</td>
+                  <td>
+                    <div class="meter" [class.bad]="c.days_remaining <= 7" [class.warn]="c.days_remaining > 7 && c.days_remaining <= 30">
+                      <span [style.width.%]="c.days_remaining <= 0 ? 100 : (c.days_remaining >= 90 ? 100 : c.days_remaining / 0.9)"></span>
+                    </div>
+                    <span class="days" [class.late]="c.days_remaining <= 7" [class.soon]="c.days_remaining > 7 && c.days_remaining <= 30">
+                      {{ c.days_remaining < 0 ? 'expired ' + -c.days_remaining + ' days ago' : c.days_remaining + ' days' }}
+                    </span>
+                  </td>
+                  <td class="right">
+                    @if (c.severity !== 'info') {
+                      <a [routerLink]="['/findings', c.finding]">Issue</a>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      }
+    }
+  }
+</div>
