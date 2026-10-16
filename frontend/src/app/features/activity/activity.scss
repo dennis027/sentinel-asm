@@ -1,0 +1,41 @@
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 17px;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    background: var(--color-border);
+  }
+
+  li {
+    position: relative;
+    display: flex;
+    gap: var(--space-4);
+    padding: var(--space-2) 0 var(--space-3);
+  }
+}
+
+.marker {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+  color: var(--color-link);
+  z-index: 1;
+}
+
+.body { padding-top: 6px; min-width: 0; }
+.summary { margin: 0; font-weight: 500; }
+.meta { margin: 2px 0 0; font-size: 12.5px; }

@@ -1,0 +1,74 @@
+<div class="page">
+  <div class="header">
+    <div>
+      <h1>Compliance</h1>
+      <p class="muted">
+        Open issues mapped to the security frameworks auditors, insurers and boards ask about, and to the
+        MITRE ATT&amp;CK techniques attackers would use them for.
+      </p>
+    </div>
+  </div>
+
+  @if (isLoading()) {
+    <p class="loading">Loading…</p>
+  } @else if (errorMessage()) {
+    <p class="error" role="alert">{{ errorMessage() }}</p>
+  } @else {
+    <div class="framework-cards">
+      @for (fw of frameworks(); track fw.id) {
+        <button class="framework-card" [class.active]="selected() === fw.id" (click)="selected.set(fw.id)">
+          <span class="fw-name">{{ fw.name }}</span>
+          @if (fw.controls_with_issues === 0) {
+            <span class="fw-count good"><app-icon name="check" [size]="18" /> Clear</span>
+            <span class="fw-status">No open issues in any of its {{ fw.controls.length }} controls</span>
+          } @else {
+            <span class="fw-count">{{ fw.controls_with_issues }}<small> / {{ fw.controls.length }}</small></span>
+            <span class="fw-status">controls with open issues</span>
+          }
+        </button>
+      }
+    </div>
+
+    @if (framework(); as fw) {
+      <div class="panel">
+        <p class="panel-title">{{ fw.name }}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Control</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (control of fw.controls; track control.id) {
+              <tr>
+                <td>
+                  <span class="code">{{ control.code }}</span>
+                  {{ control.name }}
+                </td>
+                <td>
+                  @if (control.inventory_only) {
+                    <span class="badge ok"><app-icon name="check" [size]="12" /> Inventory kept</span>
+                  } @else if (control.open_issues === 0) {
+                    <span class="badge ok"><app-icon name="check" [size]="12" /> No open issues</span>
+                  } @else {
+                    <span class="badge tone-serious">{{ control.open_issues }} open</span>
+                  }
+                </td>
+                <td class="link-cell">
+                  @if (control.open_issues > 0) {
+                    <a routerLink="/findings" [queryParams]="{ control: control.id, controlName: shortNames[fw.id] + ' ' + control.code + ' ' + control.name }">
+                      View issues
+                    </a>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    <p class="disclaimer"><app-icon name="findings" [size]="14" /> {{ disclaimer() }}</p>
+  }
+</div>

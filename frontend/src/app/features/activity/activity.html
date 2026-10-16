@@ -1,0 +1,29 @@
+<div class="page narrow">
+  <div class="header">
+    <div>
+      <h1>Activity</h1>
+      <p class="muted">Who did what in {{ orgContext.selectedOrganization()?.name }}. Entries can't be edited or removed.</p>
+    </div>
+  </div>
+
+  @if (isLoading()) {
+    <p class="loading">Loading…</p>
+  } @else if (events().length === 0) {
+    <app-empty-state art="radar" title="Nothing has happened yet">
+      Scans, triage decisions and changes to the team will be listed here.
+    </app-empty-state>
+  } @else {
+    <ol class="timeline">
+      @for (event of events(); track event.id) {
+        <li>
+          <span class="marker"><app-icon [name]="iconFor(event.verb)" [size]="15" /></span>
+          <div class="body">
+            <p class="summary">{{ event.summary }}</p>
+            <p class="meta muted">{{ event.actor }} · {{ event.created_at | date: 'MMM d, y, h:mm a' }}</p>
+          </div>
+        </li>
+      }
+    </ol>
+    <app-pager [page]="page()" [count]="totalCount()" (pageChange)="onPageChange($event)" />
+  }
+</div>
