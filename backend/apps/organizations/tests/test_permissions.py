@@ -6,7 +6,7 @@ not just their own.
 """
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from apps.assets.models import Asset
 from apps.findings.models import Finding
@@ -15,6 +15,9 @@ from apps.organizations.models import Membership, Organization
 from apps.scanning.models import ScanJob
 
 
+# Domain verification is its own concern, tested in apps/api/tests.py --
+# off here so these stay purely about tenant isolation.
+@override_settings(REQUIRE_DOMAIN_VERIFICATION=False)
 class CrossTenantIsolationTests(TestCase):
     def setUp(self):
         self.alice = User.objects.create_user("alice", password="pass123")
