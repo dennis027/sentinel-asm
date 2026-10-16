@@ -1,10 +1,35 @@
 import hashlib
 import uuid
 
+from django.conf import settings
 from django.db import models
 
 from apps.assets.models import Asset
 from apps.scanning.models import ScanJob
+
+
+class FindingQuerySet(models.QuerySet):
+    def counts_toward_risk(self):
+        """
+        Findings that should lower a risk score: still detected, not
+        triaged away, and an actual issue rather than inventory. Every
+        place that scores risk goes through this so they can't disagree.
+        """
+        return self.filter(is_active=True, status=Finding.Status.OPEN).exclude(
+            finding_type__in=Finding.INVENTORY_TYPES
+        )
+
+    def by_severity(self):
+        """Worst first, then most recently seen. (`severity` is stored
+        as text, so ordering on the column itself would be alphabetical.)"""
+        rank = models.Case(
+            *[
+                models.When(severity=severity, then=models.Value(position))
+                for position, severity in enumerate(Finding.Severity.values)
+            ],
+            output_field=models.IntegerField(),
+        )
+        return self.annotate(severity_rank=rank).order_by("-severity_rank", "-last_seen")
 
 
 class Finding(models.Model):
@@ -33,6 +58,17 @@ class Finding(models.Model):
         SUBDOMAIN_DISCOVERED = "subdomain_discovered", "New subdomain discovered"
         DNS_CHANGE = "dns_change", "DNS record change"
         SCREENSHOT = "screenshot", "Website screenshot"
+        EMAIL_SECURITY = "email_security", "Email spoofing protection"
+        SUBDOMAIN_TAKEOVER = "subdomain_takeover", "Subdomain takeover risk"
+        WEAK_TLS = "weak_tls", "Weak TLS configuration"
+        OUTDATED_SOFTWARE = "outdated_software", "Outdated software"
+        SECURITY_TXT = "security_txt", "Security contact (security.txt)"
+        EXPOSED_FILE = "exposed_file", "Exposed sensitive file"
+        ZONE_TRANSFER = "zone_transfer", "DNS zone transfer allowed"
+        CORS = "cors_misconfiguration", "CORS misconfiguration"
+        INSECURE_COOKIE = "insecure_cookie", "Insecure cookie"
+        NO_HTTPS = "https_not_enforced", "HTTPS not enforced"
+        LOOKALIKE_DOMAIN = "lookalike_domain", "Lookalike domain"
 
     class Severity(models.TextChoices):
         INFO = "info", "Info"
@@ -40,6 +76,31 @@ class Finding(models.Model):
         MEDIUM = "medium", "Medium"
         HIGH = "high", "High"
         CRITICAL = "critical", "Critical"
+
+    class Status(models.TextChoices):
+        """
+        An analyst's verdict, separate from is_active. is_active is what
+        the scanner last saw (still there / gone); status is what a
+        human decided about it. Only OPEN findings count toward risk
+        scores, and re-scans never reset a verdict.
+        """
+
+        OPEN = "open", "Open"
+        ACCEPTED = "accepted", "Risk accepted"
+        FALSE_POSITIVE = "false_positive", "False positive"
+
+    # Types that record WHAT EXISTS (a subdomain, a DNS record, what the
+    # page looks like) rather than something wrong with it. They're
+    # kept as findings so changes show up as new/resolved, but they
+    # aren't issues: they don't affect risk scores and the UI lists
+    # them separately.
+    INVENTORY_TYPES = (
+        FindingType.SUBDOMAIN_DISCOVERED,
+        FindingType.DNS_CHANGE,
+        FindingType.SCREENSHOT,
+    )
+
+    objects = FindingQuerySet.as_manager()
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     scan_job = models.ForeignKey(
@@ -66,8 +127,34 @@ class Finding(models.Model):
     dedupe_key = models.CharField(max_length=64, editable=False)
 
     is_active = models.BooleanField(default=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
+    status_note = models.TextField(blank=True, default="")
+    status_changed_at = models.DateTimeField(null=True, blank=True)
+    status_changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="triaged_findings",
+    )
     first_seen = models.DateTimeField(auto_now_add=True)
     last_seen = models.DateTimeField(auto_now=True)
+    # When a scan first stopped detecting this finding. Cleared if it
+    # comes back. This is what "fixed this week" is counted from.
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    # Who is responsible for fixing it. The fix-by date is not stored:
+    # it is first_seen plus the severity's SLA (apps.findings.remediation),
+    # so changing the SLA policy re-dates every open finding at once.
+    assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="assigned_findings",
+    )
+    # A risk acceptance can be time-limited: on this date the finding
+    # goes back to open (apps.findings.tasks.expire_risk_acceptances),
+    # so "we'll live with it for now" can't quietly become forever.
+    accepted_until = models.DateField(null=True, blank=True)
+    # How many times a scan found this again after it had been fixed,
+    # and when that last happened. A fix that doesn't stick is worth
+    # knowing about: the cause wasn't dealt with.
+    reopened_count = models.PositiveIntegerField(default=0)
+    reopened_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-last_seen"]
@@ -101,3 +188,56 @@ class Finding(models.Model):
                 "before saving -- it defines what 'the same finding' means."
             )
         super().save(*args, **kwargs)
+
+
+class RiskSnapshot(models.Model):
+    """
+    One organization's headline numbers on one day. Recorded whenever
+    the risk summary is computed (and daily by celery-beat), so the
+    dashboard can show whether things are getting better or worse --
+    the current state alone can't answer that.
+    """
+
+    organization = models.ForeignKey(
+        "organizations.Organization", on_delete=models.CASCADE, related_name="risk_snapshots"
+    )
+    date = models.DateField()
+    score = models.FloatField(null=True, blank=True)
+    grade = models.CharField(max_length=2, blank=True, default="")
+    asset_count = models.PositiveIntegerField(default=0)
+    assets_at_risk = models.PositiveIntegerField(default=0)
+    open_issues = models.PositiveIntegerField(default=0)
+    critical_high = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["date"]
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "date"], name="one_snapshot_per_org_per_day")
+        ]
+
+    def __str__(self):
+        return f"{self.organization} {self.date}: {self.grade}"
+
+
+class FindingComment(models.Model):
+    """
+    A note in the discussion under a finding: "fixed in tonight's
+    deploy", "this host belongs to the marketing agency". Like the
+    activity log, the author's name is copied in so it still reads
+    correctly after an account is deleted.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    finding = models.ForeignKey(Finding, on_delete=models.CASCADE, related_name="comments")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    author_name = models.CharField(max_length=150)
+    body = models.TextField(max_length=4000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.author_name} on {self.finding_id}: {self.body[:40]}"

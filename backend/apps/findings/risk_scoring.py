@@ -12,10 +12,11 @@ to tune later without touching the model/API layer that calls it.
 
 from apps.findings.models import Finding
 
-# Points deducted per active finding, by severity. Only ACTIVE findings
-# count -- a resolved finding (is_active=False) no longer affects the
-# score, which is exactly the point of tracking resolution instead of
-# deleting rows.
+# Points deducted per active finding, by severity. Only ACTIVE, OPEN
+# findings count -- a resolved finding (is_active=False) or one an
+# analyst has accepted / marked false-positive no longer affects the
+# score, which is exactly the point of tracking resolution and triage
+# instead of deleting rows.
 SEVERITY_DEDUCTIONS = {
     Finding.Severity.CRITICAL: 25,
     Finding.Severity.HIGH: 15,
@@ -42,18 +43,37 @@ GRADE_THRESHOLDS = [
 ]
 
 
+# Highest score allowed while an issue of this severity is open: just
+# below the next grade up (C tops out at 69, B at 84). An average or a
+# sum of small deductions must never let one serious exposure look fine.
+GRADE_CAPS = {Finding.Severity.CRITICAL: 69, Finding.Severity.HIGH: 84}
+
+
+def apply_grade_cap(score: float, has_critical: bool, has_high: bool) -> float:
+    if has_critical:
+        return min(score, GRADE_CAPS[Finding.Severity.CRITICAL])
+    if has_high:
+        return min(score, GRADE_CAPS[Finding.Severity.HIGH])
+    return score
+
+
 def calculate_risk_score(active_findings) -> int:
     """
     active_findings: an iterable of Finding objects (or anything with a
     .severity attribute) -- caller is responsible for filtering to
-    is_active=True first (see Asset.risk_score below), this function
+    active, open findings first (see Asset.risk_score), this function
     doesn't do that filtering itself so it stays a pure, easily-tested
     function rather than one that assumes a specific queryset shape.
     """
     score = STARTING_SCORE
+    severities = set()
     for finding in active_findings:
         score -= SEVERITY_DEDUCTIONS.get(finding.severity, 0)
-    return max(MINIMUM_SCORE, score)
+        severities.add(finding.severity)
+    score = max(MINIMUM_SCORE, score)
+    return int(apply_grade_cap(
+        score, Finding.Severity.CRITICAL in severities, Finding.Severity.HIGH in severities
+    ))
 
 
 def grade_for_score(score: int) -> str:
