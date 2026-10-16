@@ -2,9 +2,9 @@
   <div class="header">
     <div>
       <h1>Scan history</h1>
-      <p class="muted">Every scan ever run for this organization.</p>
+      <p class="muted">Every scan run for this organization. Updates by itself while scans are in progress.</p>
     </div>
-    <select [ngModel]="statusFilter()" (ngModelChange)="onStatusChange($event)">
+    <select aria-label="Filter by status" [ngModel]="statusFilter()" (ngModelChange)="onStatusChange($event)">
       <option value="">All statuses</option>
       <option value="success">Success</option>
       <option value="failed">Failed</option>
@@ -19,9 +19,15 @@
   }
 
   @if (isLoading()) {
-    <p class="muted">Loading…</p>
+    <p class="loading">Loading…</p>
   } @else if (jobs().length === 0) {
-    <p class="muted">No scans yet — trigger one from the Scanners tab.</p>
+    @if (statusFilter()) {
+      <app-empty-state art="search" title="No scans with this status" />
+    } @else {
+      <app-empty-state art="radar" title="No scans yet">
+        Start one from the <a routerLink="/scanners">Scanners</a> page.
+      </app-empty-state>
+    }
   } @else {
     <table>
       <thead>
@@ -37,7 +43,7 @@
       <tbody>
         @for (job of jobs(); track job.id) {
           <tr>
-            <td>{{ job.scanner_name }}</td>
+            <td>{{ labelFor(job) }}</td>
             <td class="muted">{{ job.asset_value ?? job.organization_name }}</td>
             <td>
               <span class="badge status-{{ job.status }}">{{ job.status }}</span>
@@ -45,20 +51,23 @@
                 <p class="error-detail">{{ job.error_message }}</p>
               }
             </td>
-            <td class="muted">{{ job.started_at ? (job.started_at | date: 'short') : '—' }}</td>
-            <td class="muted">{{ job.finished_at ? (job.finished_at | date: 'short') : '—' }}</td>
+            <td class="muted">{{ job.started_at ? (job.started_at | date: 'MMM d, h:mm a') : '—' }}</td>
+            <td class="muted">{{ job.finished_at ? (job.finished_at | date: 'MMM d, h:mm a') : '—' }}</td>
             <td>
-              <button
-                class="secondary"
-                [disabled]="rerunningJobId() === job.id"
-                (click)="rerun(job)"
-              >
-                {{ rerunningJobId() === job.id ? 'Starting…' : 'Re-run' }}
-              </button>
+              @if (orgContext.canTriggerScans()) {
+                <button
+                  class="btn secondary small"
+                  [disabled]="rerunningJobId() === job.id"
+                  (click)="rerun(job)"
+                >
+                  {{ rerunningJobId() === job.id ? 'Starting…' : 'Re-run' }}
+                </button>
+              }
             </td>
           </tr>
         }
       </tbody>
     </table>
+    <app-pager [page]="page()" [count]="totalCount()" (pageChange)="onPageChange($event)" />
   }
 </div>

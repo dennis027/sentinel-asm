@@ -1,44 +1,102 @@
-import { Component, effect, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { Asset, ScanJob, ScannerInfo } from '../../core/models/models';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
+import { DatePipe, DecimalPipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { ScanProgress, ScannerInfo } from '../../core/models/models';
 import { AssetService } from '../../core/services/asset-service';
 import { OrganizationContextService } from '../../core/services/organization-context-service';
+import { OrganizationService } from '../../core/services/organization-service';
 import { ScanJobService } from '../../core/services/scan-job.service';
 import { ScannerService } from '../../core/services/scanner-service';
+import { ToastService } from '../../core/services/toast.service';
+import { ConfirmService } from '../../core/services/confirm.service';
+import { Icon, scannerIcon } from '../../shared/components/icon/icon';
+import { SCANNER_CATEGORIES } from '../../core/labels';
+import { firstValueFrom } from 'rxjs';
 
+// How often progress is re-read while a run is under way.
+const PROGRESS_REFRESH_MS = 4000;
+
+/**
+ * Every scanner here runs against the whole domain: one click starts
+ * it for the organization (subdomain discovery) or for every asset in
+ * it (everything else). There is no per-asset choice on this page.
+ */
 @Component({
   selector: 'app-scanners',
-  imports: [FormsModule],
+  imports: [RouterLink, Icon, DecimalPipe, DatePipe],
   templateUrl: './scanners.html',
   styleUrl: './scanners.scss',
 })
-export class Scanners {
+export class Scanners implements OnDestroy {
   private readonly scannerService = inject(ScannerService);
   private readonly assetService = inject(AssetService);
   private readonly scanJobService = inject(ScanJobService);
+  private readonly orgService = inject(OrganizationService);
+  private readonly toasts = inject(ToastService);
+  private readonly confirm = inject(ConfirmService);
   protected readonly orgContext = inject(OrganizationContextService);
+  private refreshHandle: ReturnType<typeof setTimeout> | undefined;
+
+  protected readonly scannerIcon = scannerIcon;
 
   readonly scanners = signal<ScannerInfo[]>([]);
-  readonly assets = signal<Asset[]>([]);
   readonly isLoading = signal(true);
   readonly errorMessage = signal<string | null>(null);
 
-  readonly pickingAssetFor = signal<string | null>(null);
-  readonly activeJobs = signal<Record<string, ScanJob>>({});
+  // How many assets the organization has -- what an asset-level
+  // scanner is about to be run on.
+  readonly assetCount = signal<number | null>(null);
+  // scanner name -> its latest run for this organization
+  readonly progress = signal<Record<string, ScanProgress>>({});
+  // scanner name whose start request is in flight
+  readonly startingScanner = signal<string | null>(null);
+
+  // Scanners grouped for display: discovery first, then by what they look at.
+  readonly groups = computed(() =>
+    SCANNER_CATEGORIES.map((category) => ({
+      ...category,
+      scanners: this.scanners().filter((scanner) => (scanner.category ?? 'web') === category.id),
+    })).filter((group) => group.scanners.length),
+  );
+
+  readonly isRunningAll = signal(false);
+
+  readonly canRun = computed(
+    () =>
+      this.orgContext.canTriggerScans() &&
+      (this.orgContext.selectedOrganization()?.scans_allowed ?? false),
+  );
+
+  readonly isVerifying = signal(false);
+  readonly verifyMessage = signal<string | null>(null);
 
   constructor() {
     effect(() => {
       const org = this.orgContext.selectedOrganization();
-      if (org) {
-        this.assetService.list({ organization: org.id }).subscribe({
-          next: (page) => this.assets.set(page.results),
+      untracked(() => {
+        clearTimeout(this.refreshHandle);
+        this.progress.set({});
+        this.assetCount.set(null);
+        if (!org) return;
+
+        this.loadProgress(org.id);
+        this.assetService.list({ organization: org.id, is_active: true, page_size: 1 }).subscribe({
+          next: (page) => this.assetCount.set(page.count),
         });
-      }
+      });
     });
 
     this.scannerService.list().subscribe({
       next: (scanners) => {
-        this.scanners.set(scanners);
+        // Discovery first: it is what produces the assets the others run on.
+        this.scanners.set(
+          [...scanners].sort(
+            (a, b) =>
+              Number(b.applies_to === 'organization') - Number(a.applies_to === 'organization') ||
+              a.label.localeCompare(b.label),
+          ),
+        );
         this.isLoading.set(false);
       },
       error: () => {
@@ -48,41 +106,166 @@ export class Scanners {
     });
   }
 
-  runScan(scanner: ScannerInfo): void {
-    if (scanner.applies_to === 'organization') {
-      const org = this.orgContext.selectedOrganization();
-      if (!org) return;
-      this.triggerScan(scanner.name, { scanner_name: scanner.name, organization_id: org.id });
-      return;
-    }
-    this.pickingAssetFor.set(scanner.name);
+  ngOnDestroy(): void {
+    clearTimeout(this.refreshHandle);
   }
 
-  confirmAssetPick(scannerName: string, assetId: string): void {
-    if (!assetId) return;
-    this.triggerScan(scannerName, { scanner_name: scannerName, asset_id: assetId });
-    this.pickingAssetFor.set(null);
-  }
+  verifyDomain(): void {
+    const org = this.orgContext.selectedOrganization();
+    if (!org) return;
 
-  cancelAssetPick(): void {
-    this.pickingAssetFor.set(null);
-  }
-
-  private triggerScan(scannerName: string, request: { scanner_name: string; asset_id?: string; organization_id?: string }): void {
-    this.scanJobService.trigger(request).subscribe({
-      next: (job) => {
-        this.setActiveJob(scannerName, job);
-        this.scanJobService.pollUntilComplete(job.id).subscribe({
-          next: (updated) => this.setActiveJob(scannerName, updated),
-        });
+    this.isVerifying.set(true);
+    this.verifyMessage.set(null);
+    this.orgService.verifyDomain(org.id).subscribe({
+      next: (updated) => {
+        this.isVerifying.set(false);
+        this.orgContext.updateOrganization(updated);
+        this.toasts.success(`${updated.root_domain} is verified. You can start scanning.`);
       },
-      error: () => {
-        this.errorMessage.set(`Could not start ${scannerName} scan.`);
+      error: (err: HttpErrorResponse) => {
+        this.isVerifying.set(false);
+        this.verifyMessage.set(err.error?.detail ?? 'Could not verify the domain.');
       },
     });
   }
 
-  private setActiveJob(scannerName: string, job: ScanJob): void {
-    this.activeJobs.update((jobs) => ({ ...jobs, [scannerName]: job }));
+  /** What one click on this scanner will cover, in words. */
+  scopeText(scanner: ScannerInfo): string {
+    const org = this.orgContext.selectedOrganization();
+    if (scanner.applies_to === 'organization') {
+      return `Runs once on ${org?.root_domain ?? 'the domain'}`;
+    }
+    const count = this.assetCount();
+    if (count === null) return 'Runs on every asset';
+    return `Runs on all ${count.toLocaleString()} asset${count === 1 ? '' : 's'}`;
+  }
+
+  /** Starts every scanner that isn't already running, after one confirmation. */
+  async runAll(): Promise<void> {
+    const org = this.orgContext.selectedOrganization();
+    if (!org || this.isRunningAll()) return;
+
+    const toStart = this.scanners().filter((scanner) => !this.isRunning(scanner));
+    if (!toStart.length) return;
+    const count = this.assetCount() ?? 0;
+    const perAsset = toStart.filter((s) => s.applies_to === 'asset').length;
+    const total = perAsset * count + (toStart.length - perAsset);
+    const confirmed = await this.confirm.ask({
+      title: `Run all ${toStart.length} scanners on ${org.root_domain}?`,
+      message: [
+        `That is about ${total.toLocaleString()} individual checks across ${count.toLocaleString()} assets.`,
+        ...(total > 1000 ? ['A run this size can take a long time to finish.'] : []),
+      ],
+      confirmLabel: 'Run all scanners',
+      icon: 'play',
+    });
+    if (!confirmed) return;
+
+    this.isRunningAll.set(true);
+    let started = 0;
+    for (const scanner of toStart) {
+      try {
+        await firstValueFrom(this.scanJobService.runForOrganization(scanner.name, org.id));
+        started++;
+      } catch {
+        // Already running, or refused: carry on with the others.
+      }
+    }
+    this.isRunningAll.set(false);
+    this.toasts.success(`${started} of ${toStart.length} scanners started. Progress shows on each card.`);
+    this.loadProgress(org.id);
+  }
+
+  isRunning(scanner: ScannerInfo): boolean {
+    const run = this.progress()[scanner.name];
+    return !!run && !run.finished;
+  }
+
+  /** Share of a run that has finished (succeeded or failed), 0-100. */
+  percentDone(run: ScanProgress): number {
+    return run.total ? ((run.success + run.failed) / run.total) * 100 : 0;
+  }
+
+  async runScan(scanner: ScannerInfo): Promise<void> {
+    const org = this.orgContext.selectedOrganization();
+    if (!org || this.startingScanner()) return;
+
+    // One click can mean tens of thousands of scans; say so first.
+    const count = this.assetCount();
+    if (scanner.applies_to === 'asset' && count !== null && count > 1) {
+      const message = [`This starts one scan for each of ${org.name}'s assets.`];
+      if (count > 500) {
+        message.push('That is a lot of scans and can take a long time to finish.');
+      }
+      const confirmed = await this.confirm.ask({
+        title: `Run ${scanner.label} on all ${count.toLocaleString()} assets?`,
+        message,
+        confirmLabel: 'Run scan',
+        icon: scannerIcon(scanner.name),
+      });
+      if (!confirmed) return;
+    }
+
+    this.startingScanner.set(scanner.name);
+    this.errorMessage.set(null);
+    this.scanJobService.runForOrganization(scanner.name, org.id).subscribe({
+      next: (started) => {
+        this.startingScanner.set(null);
+        this.toasts.success(
+          started.target_count > 1
+            ? `${scanner.label} started on ${started.target_count.toLocaleString()} assets.`
+            : `${scanner.label} started.`,
+        );
+        // Show it as running straight away; the server fills in real
+        // numbers on the next refresh.
+        this.progress.update((progress) => ({
+          ...progress,
+          [scanner.name]: {
+            scanner_name: scanner.name,
+            batch_id: started.batch_id,
+            started_at: new Date().toISOString(),
+            total: started.target_count,
+            pending: started.target_count,
+            running: 0,
+            success: 0,
+            failed: 0,
+            finished: false,
+          },
+        }));
+        this.scheduleRefresh(org.id);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.startingScanner.set(null);
+        // 403 and 409 carry the reason (role, unverified domain, already running).
+        this.errorMessage.set(err.error?.detail ?? `Could not start ${scanner.label}.`);
+        this.loadProgress(org.id);
+      },
+    });
+  }
+
+  private loadProgress(orgId: string): void {
+    this.scanJobService.progress(orgId).subscribe({
+      next: (runs) => {
+        if (this.orgContext.selectedOrganization()?.id !== orgId) return;
+        const fromServer = Object.fromEntries(runs.map((run) => [run.scanner_name, run]));
+        // Keep a just-started run the server hasn't written a job for yet.
+        const waiting = Object.fromEntries(
+          Object.entries(this.progress()).filter(
+            ([name, run]) => !run.finished && fromServer[name]?.batch_id !== run.batch_id,
+          ),
+        );
+        this.progress.set({ ...fromServer, ...waiting });
+        this.scheduleRefresh(orgId);
+      },
+      // Progress is a nicety; the page still works without it.
+      error: () => undefined,
+    });
+  }
+
+  /** Keeps refreshing for as long as anything is still running. */
+  private scheduleRefresh(orgId: string): void {
+    clearTimeout(this.refreshHandle);
+    if (!Object.values(this.progress()).some((run) => !run.finished)) return;
+    this.refreshHandle = setTimeout(() => this.loadProgress(orgId), PROGRESS_REFRESH_MS);
   }
 }

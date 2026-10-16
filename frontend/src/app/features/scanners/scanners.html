@@ -1,44 +1,124 @@
 <div class="page">
-  <h1>Scanners</h1>
-  <p class="muted">Trigger a scan against an asset or the whole organization.</p>
+  <div class="header">
+    <div>
+      <h1>Scanners</h1>
+      <p class="muted">
+        Each scanner runs across the whole of
+        {{ orgContext.selectedOrganization()?.root_domain ?? 'your domain' }}. Start one now, or
+        leave it: they all run automatically once a day. Results appear under
+        <a routerLink="/findings">Findings</a>; past runs are in
+        <a routerLink="/scan-history">Scan history</a>.
+      </p>
+    </div>
+    <button class="btn" [disabled]="!canRun() || isRunningAll() || isLoading()" (click)="runAll()">
+      <app-icon name="play" [size]="14" /> {{ isRunningAll() ? 'Starting…' : 'Run all scanners' }}
+    </button>
+  </div>
+
+  @if (orgContext.selectedOrganization(); as org) {
+    @if (!org.scans_allowed && org.verification_required && !org.domain_verified) {
+      <div class="notice">
+        <p class="notice-title">Verify {{ org.root_domain }} before scanning</p>
+        <p>
+          Scans stay disabled until this organization proves it controls the domain. Add this DNS
+          TXT record, then check it:
+        </p>
+        <dl>
+          <dt>Name</dt>
+          <dd><code>{{ org.verification_record_name }}</code></dd>
+          <dt>Value</dt>
+          <dd><code>{{ org.verification_record_value }}</code></dd>
+        </dl>
+        @if (orgContext.canManageSettings()) {
+          <button class="btn inline" [disabled]="isVerifying()" (click)="verifyDomain()">
+            {{ isVerifying() ? 'Checking DNS…' : 'Check record' }}
+          </button>
+        } @else {
+          <p>Ask an organization admin to complete this step.</p>
+        }
+        @if (verifyMessage()) {
+          <p class="error">{{ verifyMessage() }}</p>
+        }
+      </div>
+    }
+  }
+
+  @if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
+  }
 
   @if (isLoading()) {
-    <p class="muted">Loading…</p>
-  } @else if (errorMessage()) {
-    <p class="error">{{ errorMessage() }}</p>
+    <p class="loading">Loading…</p>
   } @else {
+    @if (!orgContext.canTriggerScans()) {
+      <p class="muted readonly-note">Your role in this organization is read-only, so you can't start scans.</p>
+    }
+    @for (group of groups(); track group.id) {
+    <section class="group">
+    <h2>{{ group.label }} <span class="muted">{{ group.blurb }}</span></h2>
     <div class="grid">
-      @for (scanner of scanners(); track scanner.name) {
+      @for (scanner of group.scanners; track scanner.name) {
         <div class="card">
-          <p class="name">{{ scanner.name }}</p>
-          <p class="scope muted">
-            {{ scanner.applies_to === 'organization' ? 'Org-wide' : 'Per asset' }}
-          </p>
+          <span class="scanner-icon"><app-icon [name]="scannerIcon(scanner.name)" [size]="20" /></span>
+          <p class="name">{{ scanner.label }}</p>
+          <p class="description muted">{{ scanner.description }}</p>
+          <p class="scope">{{ scopeText(scanner) }}</p>
 
-          @if (pickingAssetFor() === scanner.name) {
-            <select #assetPick>
-              <option value="">Choose an asset…</option>
-              @for (asset of assets(); track asset.id) {
-                <option [value]="asset.id">{{ asset.value }}</option>
-              }
-            </select>
-            <div class="picker-actions">
-              <button (click)="confirmAssetPick(scanner.name, assetPick.value)">Go</button>
-              <button class="secondary" (click)="cancelAssetPick()">Cancel</button>
-            </div>
-          } @else if (activeJobs()[scanner.name]; as job) {
-            <p class="status status-{{ job.status }}">
-              {{ job.status }}
-              @if (job.status === 'failed') {
-                — {{ job.error_message }}
-              }
-            </p>
-            <button (click)="runScan(scanner)">Run again</button>
-          } @else {
-            <button (click)="runScan(scanner)">Run scan</button>
+          @if (progress()[scanner.name]; as run) {
+            @if (!run.finished) {
+              <div class="run" role="status">
+                <div
+                  class="meter"
+                  role="progressbar"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  [attr.aria-valuenow]="percentDone(run) | number: '1.0-0'"
+                  [attr.aria-label]="scanner.label + ' progress'"
+                >
+                  <span class="meter-fill" [style.width.%]="percentDone(run)"></span>
+                </div>
+                <p class="run-text">
+                  @if (run.total > 1) {
+                    {{ run.success + run.failed | number }} of {{ run.total | number }} done
+                  } @else {
+                    Running…
+                  }
+                  @if (run.failed) {
+                    · <span class="failed">{{ run.failed | number }} failed</span>
+                  }
+                </p>
+              </div>
+            } @else {
+              <p class="run-text last">
+                Last run {{ run.started_at | date: 'MMM d, h:mm a' }}:
+                {{ run.success | number }} finished
+                @if (run.failed) {
+                  · <span class="failed">{{ run.failed | number }} failed</span>
+                }
+                ·
+                <a routerLink="/findings">See findings</a>
+              </p>
+            }
           }
+
+          <button
+            class="btn secondary block"
+            [disabled]="!canRun() || startingScanner() === scanner.name || isRunning(scanner)"
+            (click)="runScan(scanner)"
+          >
+            <app-icon name="play" [size]="14" />
+            @if (isRunning(scanner)) {
+              Running…
+            } @else if (progress()[scanner.name]) {
+              Run again
+            } @else {
+              Run scan
+            }
+          </button>
         </div>
       }
     </div>
+    </section>
+    }
   }
 </div>
