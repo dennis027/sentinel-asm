@@ -1,0 +1,184 @@
+<div class="page">
+  <a class="back" routerLink="/findings"><app-icon name="arrow-left" [size]="14" /> Findings</a>
+
+  @if (isLoading()) {
+    <p class="loading">Loading…</p>
+  } @else if (errorMessage()) {
+    <p class="error" role="alert">{{ errorMessage() }}</p>
+  } @else if (finding(); as f) {
+    <div class="header">
+      <div class="title-block">
+        <p class="badges">
+          <span class="badge severity-{{ f.severity }}">{{ f.severity }}</span>
+          <span class="badge">{{ typeLabel(f.finding_type) }}</span>
+          @if (!f.is_active) {
+            <span class="badge ok"><app-icon name="check" [size]="12" /> Fixed</span>
+          } @else if (f.status !== 'open') {
+            <span class="badge">{{ statusLabels[f.status] }}</span>
+          }
+          @if (f.overdue) {
+            <span class="badge tone-danger">Overdue</span>
+          }
+          @if (f.reopened_count > 0) {
+            <span class="badge tone-serious" title="It was fixed, then a scan found it again">
+              <app-icon name="repeat" [size]="12" /> Came back{{ f.reopened_count > 1 ? ' ×' + f.reopened_count : '' }}
+            </span>
+          }
+        </p>
+        <h1>{{ f.title }}</h1>
+        <p class="muted">
+          on <a [routerLink]="['/assets', f.asset]">{{ f.asset_value }}</a>
+          @if (f.asset_criticality === 'crown_jewel' || f.asset_criticality === 'high') {
+            <span class="badge jewel"><app-icon name="gem" [size]="12" /> {{ criticalityLabel(f.asset_criticality) }}</span>
+          }
+        </p>
+      </div>
+      @if (f.impact) {
+        <button class="btn secondary" (click)="copyAsTicket()"><app-icon name="copy" [size]="14" /> Copy as ticket</button>
+      }
+    </div>
+
+    <div class="layout">
+      <div class="main">
+        @if (f.impact) {
+          <div class="panel guidance">
+            <p class="panel-title">Why it matters</p>
+            <p>{{ f.impact }}</p>
+            <p class="panel-title">What to do</p>
+            <p>{{ f.remediation }}</p>
+          </div>
+        }
+
+        @if (attack().length || otherControls().length) {
+          <div class="panel">
+            @if (attack().length) {
+              <p class="panel-title">How attackers use this</p>
+              <ul class="techniques">
+                @for (c of attack(); track c.id) {
+                  <li>
+                    <a [href]="'https://attack.mitre.org/techniques/' + c.code.replace('.', '/') + '/'" target="_blank" rel="noopener">
+                      {{ c.code }}
+                    </a>
+                    {{ c.name }}
+                  </li>
+                }
+              </ul>
+            }
+            @if (otherControls().length) {
+              <p class="panel-title">Related controls</p>
+              <div class="chips">
+                @for (c of otherControls(); track c.id) {
+                  <a class="control-chip" [title]="c.name" routerLink="/findings"
+                     [queryParams]="{ control: c.id, controlName: frameworkNames[c.framework] + ' ' + c.code + ' ' + c.name }">
+                    {{ frameworkNames[c.framework] }} {{ c.code }}
+                  </a>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <div class="panel">
+          <p class="panel-title">Details</p>
+          @if (f.description) {
+            <p>{{ f.description }}</p>
+          }
+          <dl>
+            @if (f.due_at) {
+              <dt>Fix by</dt>
+              <dd [class.late]="f.overdue">{{ f.due_at | date: 'mediumDate' }}{{ f.overdue ? ' — overdue' : '' }}</dd>
+            }
+            <dt>First seen</dt>
+            <dd>{{ f.first_seen | date: 'medium' }}</dd>
+            <dt>Last seen</dt>
+            <dd>{{ f.last_seen | date: 'medium' }}</dd>
+            @if (f.accepted_until) {
+              <dt>Accepted until</dt>
+              <dd>{{ f.accepted_until | date: 'mediumDate' }}, then it opens again</dd>
+            }
+            @if (f.status !== 'open' && f.status_note) {
+              <dt>Reason</dt>
+              <dd>{{ f.status_note }}</dd>
+            }
+            @for (d of details(); track d.key) {
+              <dt>{{ d.key }}</dt>
+              <dd>{{ d.value }}</dd>
+            }
+          </dl>
+        </div>
+
+        @if (orgContext.canTriageFindings() && f.is_active) {
+          <div class="panel decide">
+            <p class="panel-title">Decide</p>
+            @if (f.due_at) {
+              <label class="owner">
+                Owner
+                <select aria-label="Who is responsible for fixing this" [ngModel]="f.assignee ?? ''"
+                        (ngModelChange)="assign($event)">
+                  <option value="">Nobody yet</option>
+                  @for (m of members(); track m.id) {
+                    <option [value]="m.user_id">{{ m.username }}</option>
+                  }
+                </select>
+              </label>
+            }
+            @if (f.status === 'open') {
+              <input placeholder="Reason (optional)" aria-label="Reason for this decision"
+                     [ngModel]="note()" (ngModelChange)="note.set($event)" />
+              <div class="row">
+                <label class="until">
+                  Accept until
+                  <input type="date" [min]="minDate" aria-label="Accept the risk until"
+                         [ngModel]="acceptUntil()" (ngModelChange)="acceptUntil.set($event)" />
+                </label>
+                <button class="btn secondary" [disabled]="isTriaging()" (click)="triage('accepted')"
+                        title="The issue is real, but you have decided to live with it">Accept risk</button>
+                <button class="btn secondary" [disabled]="isTriaging()" (click)="triage('false_positive')"
+                        title="The scanner is wrong; this is not a real issue">False positive</button>
+              </div>
+              <p class="hint">
+                Leave the date empty to accept for good. With a date, it reopens by itself on that day so someone
+                looks again.
+              </p>
+            } @else {
+              <button class="btn secondary" [disabled]="isTriaging()" (click)="triage('open')">Reopen</button>
+            }
+          </div>
+        }
+      </div>
+
+      <aside class="side panel">
+        <p class="panel-title">History and discussion</p>
+        <ol class="timeline">
+          @for (entry of timeline(); track $index) {
+            <li [class.comment]="entry.kind === 'comment'">
+              <span class="dot"><app-icon [name]="timelineIcon(entry.kind)" [size]="13" /></span>
+              <div>
+                @if (entry.kind === 'comment') {
+                  <p class="who"><strong>{{ entry.actor }}</strong> <span class="when">{{ entry.at | date: 'MMM d, h:mm a' }}</span></p>
+                  <p class="body">{{ entry.text }}</p>
+                } @else {
+                  <p class="body">{{ entry.text }}</p>
+                  <p class="when">{{ entry.actor && entry.actor !== 'System' ? entry.actor + ' · ' : '' }}{{ entry.at | date: 'MMM d, y, h:mm a' }}</p>
+                }
+              </div>
+            </li>
+          }
+        </ol>
+        <form class="comment-form" (ngSubmit)="postComment()">
+          <textarea
+            name="comment"
+            rows="3"
+            placeholder="Add a note for the team: what you found, what you changed…"
+            aria-label="Comment"
+            [ngModel]="comment()"
+            (ngModelChange)="comment.set($event)"
+          ></textarea>
+          <button class="btn small" type="submit" [disabled]="!comment().trim() || isPosting()">
+            {{ isPosting() ? 'Posting…' : 'Comment' }}
+          </button>
+        </form>
+      </aside>
+    </div>
+  }
+</div>

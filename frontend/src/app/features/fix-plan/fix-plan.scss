@@ -1,0 +1,131 @@
+.outlook {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-5);
+  align-items: center;
+  margin-bottom: var(--space-4);
+
+  .small { grid-column: 1 / -1; margin: 0; font-size: 12.5px; }
+}
+
+.now, .after {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.grade.badge {
+  height: auto;
+  min-width: 40px;
+  justify-content: center;
+  padding: 4px 10px;
+  font-size: 18px;
+  text-transform: none;
+}
+
+.milestones {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  li { display: flex; align-items: center; gap: var(--space-2); font-size: 14px; }
+  .grade.badge { font-size: 13px; min-width: 30px; padding: 1px 8px; }
+}
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.step.panel { margin: 0; }
+.step.milestone { border-left: 3px solid var(--color-success); }
+
+.step-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.number {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.step-main { flex: 1; min-width: 0; }
+.action { margin: 0 0 6px; font-weight: 600; font-size: 15px; }
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.badge.jewel { background: var(--color-accent-bg); color: var(--color-accent); }
+
+.remediation {
+  margin: var(--space-3) 0 0 42px;
+  font-size: 13.5px;
+  color: var(--color-text-secondary);
+}
+
+.step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0 42px;
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; }
+  .assign { width: auto; height: 30px; font-size: 13px; }
+}
+
+.items {
+  list-style: none;
+  margin: var(--space-3) 0 0 42px;
+  padding: 0;
+  border-top: 1px solid var(--color-border);
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 13px;
+  }
+
+  .issue { color: var(--color-text-secondary); }
+}
+
+@media (max-width: 640px) {
+  .outlook { grid-template-columns: 1fr; }
+  .remediation, .step-actions, .items { margin-left: 0; }
+}

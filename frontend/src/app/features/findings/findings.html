@@ -1,15 +1,37 @@
 <div class="page">
   <div class="header">
-    <h1>Findings</h1>
-    <div class="export-buttons">
-      <button class="secondary" (click)="downloadExport('csv')">CSV</button>
-      <button class="secondary" (click)="downloadExport('json')">JSON</button>
-      <button class="secondary" (click)="downloadExport('pdf')">PDF</button>
+    <div>
+      <h1>Findings</h1>
+      <p class="muted">
+        What the scanners found on {{ orgContext.selectedOrganization()?.name }}'s assets, most severe first.
+      </p>
+    </div>
+    <div class="export-buttons" role="group" aria-label="Download all findings">
+      <app-icon class="muted" name="download" [size]="16" />
+      <button class="btn secondary" (click)="downloadExport('csv')">CSV</button>
+      <button class="btn secondary" (click)="downloadExport('json')">JSON</button>
+      <button class="btn secondary" (click)="downloadExport('pdf')">PDF</button>
     </div>
   </div>
 
   <div class="controls">
-    <select [ngModel]="severityFilter()" (ngModelChange)="onSeverityChange($event)">
+    <input
+      type="search"
+      placeholder="Search findings"
+      aria-label="Search findings by title"
+      [ngModel]="searchTerm()"
+      (ngModelChange)="onSearchChange($event)"
+    />
+    <select aria-label="What to show" [ngModel]="kind()" (ngModelChange)="onKindChange($event)">
+      <option value="issue">Security issues</option>
+      <option value="inventory" title="Subdomains, DNS records and screenshots">Inventory</option>
+      <option value="">Everything</option>
+    </select>
+    <select
+      aria-label="Filter by severity"
+      [ngModel]="severityFilter()"
+      (ngModelChange)="onSeverityChange($event)"
+    >
       <option value="">All severities</option>
       <option value="critical">Critical</option>
       <option value="high">High</option>
@@ -17,35 +39,267 @@
       <option value="low">Low</option>
       <option value="info">Info</option>
     </select>
+    <select aria-label="Remediation" [ngModel]="workflow()" (ngModelChange)="onWorkflowChange($event)">
+      <option value="">Anyone's</option>
+      <option value="mine">Assigned to me</option>
+      <option value="unassigned">Nobody assigned</option>
+      <option value="overdue">Past fix-by date</option>
+      <option value="regressed">Came back after a fix</option>
+      <option value="crown">On crown-jewel hosts</option>
+    </select>
     <div class="toggle">
+      <button [class.active]="view() === 'open'" (click)="onViewChange('open')">Open</button>
       <button
-        [class.active]="statusFilter() === 'active'"
-        (click)="onStatusChange('active')"
-      >Active</button>
+        [class.active]="view() === 'triaged'"
+        (click)="onViewChange('triaged')"
+        title="Accepted risks and false positives"
+      >Triaged</button>
       <button
-        [class.active]="statusFilter() === 'resolved'"
-        (click)="onStatusChange('resolved')"
+        [class.active]="view() === 'resolved'"
+        (click)="onViewChange('resolved')"
+        title="No longer detected"
       >Resolved</button>
     </div>
   </div>
 
+  @if (typeFilter(); as type) {
+    <p class="filter-chip">
+      Showing <strong>{{ typeLabel(type) }}</strong> issues
+      @if (severityFilter()) {
+        of <strong>{{ severityFilter() }}</strong> severity
+      }
+      <button class="btn secondary" (click)="clearTypeFilter()">Show all</button>
+    </p>
+  }
+
+  @if (controlFilter(); as control) {
+    <p class="filter-chip">
+      Showing issues related to <strong>{{ control.name }}</strong>
+      <button class="btn secondary" (click)="clearControlFilter()">Show all</button>
+    </p>
+  }
+
+  @if (assetFilter(); as asset) {
+    <p class="filter-chip">
+      Showing findings for <strong>{{ asset.name }}</strong>
+      <button class="btn secondary" (click)="clearAssetFilter()">Show all assets</button>
+    </p>
+  }
+
   @if (isLoading()) {
-    <p class="muted">Loading…</p>
+    <p class="loading">Loading…</p>
   } @else if (errorMessage()) {
-    <p class="error">{{ errorMessage() }}</p>
+    <p class="error" role="alert">{{ errorMessage() }}</p>
   } @else if (findings().length === 0) {
-    <p class="muted">No findings match these filters.</p>
+    <app-empty-state [art]="emptyState().art" [title]="emptyState().title">
+      {{ emptyState().message }}
+    </app-empty-state>
   } @else {
+    <div class="list-head">
+      @if (canBulkEdit()) {
+        <label class="select-all">
+          <input type="checkbox" [checked]="allSelected()" (change)="toggleAll()" aria-label="Select every finding on this page" />
+        </label>
+      }
+      <p class="muted count">{{ totalCount() | plural: 'finding' }}</p>
+    </div>
+    @if (selected().size > 0) {
+      <div class="bulk-bar" role="region" aria-label="Bulk actions">
+        <strong>{{ selected().size }} selected</strong>
+        <select aria-label="Assign the selected findings" [disabled]="isBulkWorking()"
+                (change)="bulkAssign($any($event.target).value); $any($event.target).value = ''">
+          <option value="">Assign to…</option>
+          <option value="none">Nobody</option>
+          @for (member of members(); track member.id) {
+            <option [value]="member.user_id">{{ member.username }}</option>
+          }
+        </select>
+        @if (view() === 'open') {
+          <button class="btn secondary small" [disabled]="isBulkWorking()" (click)="bulkTriage('accepted')">Accept risk</button>
+          <button class="btn secondary small" [disabled]="isBulkWorking()" (click)="bulkTriage('false_positive')">False positive</button>
+        } @else {
+          <button class="btn secondary small" [disabled]="isBulkWorking()" (click)="bulkTriage('open')">Reopen</button>
+        }
+        <button class="btn secondary small" (click)="clearSelection()">Clear</button>
+      </div>
+    }
     <div class="list">
       @for (finding of findings(); track finding.id) {
-        <div class="row">
-          <span class="badge severity-{{ finding.severity }}">{{ finding.severity }}</span>
-          <div class="details">
-            <p class="title">{{ finding.title }}</p>
-            <p class="meta muted">{{ finding.asset_value }} · {{ finding.finding_type }}</p>
+        <div class="row" [class.expanded]="expandedId() === finding.id" [class.selected]="selected().has(finding.id)">
+          <div class="row-main">
+            @if (canBulkEdit()) {
+              <input type="checkbox" class="pick" [checked]="selected().has(finding.id)"
+                     (change)="toggleSelected(finding.id)" [attr.aria-label]="'Select ' + finding.title" />
+            }
+            <span class="badge severity-{{ finding.severity }}">{{ finding.severity }}</span>
+            <div class="details">
+              <a class="title" [routerLink]="['/findings', finding.id]">{{ finding.title }}</a>
+              <p class="meta muted">
+                @if (finding.overdue) {
+                  <span class="badge tone-danger overdue">Overdue</span>
+                }
+                @if (finding.reopened_count > 0) {
+                  <span class="badge tone-serious overdue" title="It was fixed, then a scan found it again">
+                    <app-icon name="repeat" [size]="11" /> Came back
+                  </span>
+                }
+                @if (finding.asset_criticality === 'crown_jewel') {
+                  <span class="badge jewel overdue" title="On a host marked as a crown jewel">
+                    <app-icon name="gem" [size]="11" /> Crown jewel
+                  </span>
+                }
+                {{ finding.asset_value }} · {{ typeLabel(finding.finding_type) }}
+                @if (finding.assignee_username) {
+                  · <app-icon name="users" [size]="12" /> {{ finding.assignee_username }}
+                }
+                @if (finding.status !== 'open') {
+                  · {{ statusLabels[finding.status] }}
+                  @if (finding.status_changed_by) {
+                    by {{ finding.status_changed_by }}
+                  }
+                }
+              </p>
+              @if (screenshotUrls()[finding.id]; as url) {
+                <a [href]="url" target="_blank" rel="noopener">
+                  <img [src]="url" alt="Screenshot of {{ finding.asset_value }}" class="thumbnail" />
+                </a>
+              }
+            </div>
+            <button
+              class="quick"
+              [class.open]="expandedId() === finding.id"
+              [attr.aria-expanded]="expandedId() === finding.id"
+              [attr.aria-label]="(expandedId() === finding.id ? 'Close quick view of ' : 'Quick view of ') + finding.title"
+              [title]="expandedId() === finding.id ? 'Close' : 'Quick view: decide without leaving the list'"
+              (click)="toggleDetails(finding)"
+            >
+              <app-icon name="chevron" [size]="18" />
+            </button>
           </div>
+
+          @if (expandedId() === finding.id) {
+            <div class="more">
+              @if (finding.description) {
+                <p>{{ finding.description }}</p>
+              }
+              @if (finding.impact) {
+                <div class="guidance">
+                  <p><strong>Why it matters.</strong> {{ finding.impact }}</p>
+                  <p><strong>What to do.</strong> {{ finding.remediation }}</p>
+                </div>
+              }
+              @if (finding.controls.length) {
+                <div class="controls-row">
+                  @for (control of finding.controls; track control.id) {
+                    <span class="control-chip" [title]="control.name">
+                      {{ frameworkNames[control.framework] }} {{ control.code }}
+                    </span>
+                  }
+                </div>
+              }
+              <dl>
+                @if (finding.due_at) {
+                  <dt>Fix by</dt>
+                  <dd [class.late]="finding.overdue">
+                    {{ finding.due_at | date: 'mediumDate' }}{{ finding.overdue ? ' — overdue' : '' }}
+                  </dd>
+                }
+                <dt>First seen</dt>
+                <dd>{{ finding.first_seen | date: 'medium' }}</dd>
+                <dt>Last seen</dt>
+                <dd>{{ finding.last_seen | date: 'medium' }}</dd>
+                @for (detail of rawDetails(finding); track detail.key) {
+                  <dt>{{ detail.key }}</dt>
+                  <dd>{{ detail.value }}</dd>
+                }
+                @if (finding.status !== 'open' && finding.status_note) {
+                  <dt>Note</dt>
+                  <dd>{{ finding.status_note }}</dd>
+                }
+                @if (finding.accepted_until) {
+                  <dt>Accepted until</dt>
+                  <dd>{{ finding.accepted_until | date: 'mediumDate' }}</dd>
+                }
+              </dl>
+
+              <div class="workflow">
+                @if (orgContext.canTriageFindings() && finding.is_active && finding.due_at) {
+                  <label class="owner">
+                    Owner
+                    <select
+                      [attr.aria-label]="'Who is responsible for ' + finding.title"
+                      [ngModel]="finding.assignee ?? ''"
+                      (ngModelChange)="assign(finding, $event)"
+                    >
+                      <option value="">Nobody yet</option>
+                      @for (member of members(); track member.id) {
+                        <option [value]="member.user_id">{{ member.username }}</option>
+                      }
+                    </select>
+                  </label>
+                }
+                @if (finding.impact) {
+                  <button class="btn secondary small" (click)="copyAsTicket(finding)">
+                    <app-icon name="copy" [size]="13" /> Copy as ticket
+                  </button>
+                }
+                <a class="btn secondary small" [routerLink]="['/findings', finding.id]">
+                  <app-icon name="message" [size]="13" /> Open full page
+                </a>
+              </div>
+
+              @if (orgContext.canTriageFindings() && view() !== 'resolved') {
+                <div class="triage">
+                  @if (finding.status === 'open') {
+                    <input
+                      placeholder="Reason (optional)"
+                      aria-label="Reason for this decision"
+                      [ngModel]="triageNote()"
+                      (ngModelChange)="triageNote.set($event)"
+                    />
+                    <label class="until-label" title="Optional: the acceptance ends on this date and the finding opens again">
+                      Until
+                      <input
+                        type="date"
+                        class="until"
+                        aria-label="Accept the risk until (optional)"
+                        [min]="minAcceptDate"
+                        [ngModel]="acceptUntil()"
+                        (ngModelChange)="acceptUntil.set($event)"
+                      />
+                    </label>
+                    <button
+                      class="btn secondary"
+                      title="The issue is real, but you have decided to live with it"
+                      [disabled]="triagingId() === finding.id"
+                      (click)="triage(finding, 'accepted')"
+                    >Accept risk</button>
+                    <button
+                      class="btn secondary"
+                      title="The scanner is wrong; this is not a real issue"
+                      [disabled]="triagingId() === finding.id"
+                      (click)="triage(finding, 'false_positive')"
+                    >False positive</button>
+                  } @else {
+                    <button
+                      class="btn secondary"
+                      [disabled]="triagingId() === finding.id"
+                      (click)="triage(finding, 'open')"
+                    >Reopen</button>
+                  }
+                </div>
+                @if (finding.status === 'open') {
+                  <p class="muted hint">
+                    Either choice removes the finding from the risk score. You can reopen it later. Give an
+                    acceptance an end date and it reopens by itself on that day.
+                  </p>
+                }
+              }
+            </div>
+          }
         </div>
       }
     </div>
+    <app-pager [page]="page()" [count]="totalCount()" (pageChange)="onPageChange($event)" />
   }
 </div>

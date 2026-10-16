@@ -1,0 +1,57 @@
+<div class="page narrow">
+  <div class="header">
+    <div>
+      <h1>My work</h1>
+      <p class="muted">
+        Issues in {{ orgContext.selectedOrganization()?.name }} you are responsible for fixing, by deadline.
+      </p>
+    </div>
+  </div>
+
+  @if (isLoading()) {
+    <p class="loading">Loading…</p>
+  } @else if (errorMessage()) {
+    <p class="error" role="alert">{{ errorMessage() }}</p>
+  } @else if (findings().length === 0) {
+    <app-empty-state art="shield" title="Nothing assigned to you">
+      When someone makes you the owner of an issue, it shows up here with its fix-by date.
+      See the <a routerLink="/fix-plan">fix plan</a> for what needs doing.
+    </app-empty-state>
+  } @else {
+    @if (total() > findings().length) {
+      <p class="hint">Showing the first {{ findings().length }} of {{ total() }}.
+        <a routerLink="/findings" [queryParams]="{ assignee: 'me' }">See them all</a></p>
+    }
+    @for (bucket of buckets(); track bucket.id) {
+      <section class="bucket" [class.late]="bucket.id === 'overdue'">
+        <h2>{{ bucket.title }} <span class="count">{{ bucket.findings.length }}</span>
+          @if (bucket.hint) {
+            <small class="muted">{{ bucket.hint }}</small>
+          }
+        </h2>
+        <ul class="panel">
+          @for (f of bucket.findings; track f.id) {
+            <li>
+              <span class="badge severity-{{ f.severity }}">{{ f.severity }}</span>
+              <div class="what">
+                <a class="title" [routerLink]="['/findings', f.id]">{{ f.title }}</a>
+                <p class="muted">
+                  {{ f.asset_value }} · {{ typeLabel(f.finding_type) }}
+                  @if (f.reopened_count > 0) {
+                    · <app-icon name="repeat" [size]="11" /> came back
+                  }
+                </p>
+              </div>
+              @if (f.due_at) {
+                <div class="due" [class.late]="f.overdue">
+                  <span>{{ daysLeft(f) }}</span>
+                  <small>{{ f.due_at | date: 'MMM d' }}</small>
+                </div>
+              }
+            </li>
+          }
+        </ul>
+      </section>
+    }
+  }
+</div>

@@ -1,0 +1,108 @@
+<div class="page">
+  <div class="header">
+    <div>
+      <h1>Fix plan</h1>
+      <p class="muted">
+        Every open issue as a to-do list: what to fix first, and what each fix does for your grade.
+      </p>
+    </div>
+  </div>
+
+  @if (isLoading()) {
+    <p class="loading">Loading…</p>
+  } @else if (errorMessage()) {
+    <p class="error" role="alert">{{ errorMessage() }}</p>
+  } @else if (plan(); as plan) {
+    @if (plan.steps.length === 0) {
+      <app-empty-state art="shield" title="Nothing to fix">
+        No open issues need action. Keep scanning to make sure it stays that way.
+      </app-empty-state>
+    } @else {
+      <div class="outlook panel">
+        <div class="now">
+          <span class="label">Grade today</span>
+          <span class="grade badge grade-{{ plan.current_grade }}">{{ plan.current_grade }}</span>
+        </div>
+        <ol class="milestones">
+          @for (m of milestones(); track m.step) {
+            <li>
+              <app-icon name="chevron-right" [size]="16" />
+              <span>
+                Fix step{{ m.step > 1 ? 's 1–' + m.step : ' 1' }} and the grade becomes
+                <span class="grade badge grade-{{ m.grade }}">{{ m.grade }}</span>
+              </span>
+            </li>
+          }
+        </ol>
+        <p class="muted small">
+          {{ plan.steps.length }} fixes cover every open issue. Worst first; among equals, the ones touching
+          crown-jewel hosts, then the ones that close the most issues.
+        </p>
+      </div>
+
+      <ol class="steps">
+        @for (step of plan.steps; track $index; let i = $index) {
+          <li class="step panel" [class.milestone]="raisesGrade(i)">
+            <div class="step-head">
+              <span class="number">{{ i + 1 }}</span>
+              <div class="step-main">
+                <p class="action">{{ step.action }}</p>
+                <p class="meta">
+                  <span class="badge severity-{{ step.severity }}">{{ step.severity }}</span>
+                  <span>{{ step.issues }} issue{{ step.issues === 1 ? '' : 's' }} on {{ step.hosts }}
+                    host{{ step.hosts === 1 ? '' : 's' }}</span>
+                  @if (step.crown_jewels) {
+                    <span class="badge jewel"><app-icon name="gem" [size]="12" /> Crown jewel</span>
+                  }
+                  @if (step.overdue) {
+                    <span class="badge tone-danger">{{ step.overdue }} overdue</span>
+                  }
+                </p>
+              </div>
+              <div class="after" [title]="'Grade once steps 1 to ' + (i + 1) + ' are done'">
+                <span class="label">Then</span>
+                <span class="grade badge grade-{{ step.grade_after }}">{{ step.grade_after }}</span>
+              </div>
+            </div>
+
+            @if (step.remediation) {
+              <p class="remediation">{{ step.remediation }}</p>
+            }
+
+            <div class="step-actions">
+              <button class="btn secondary small" (click)="toggle(i)" [attr.aria-expanded]="openStep() === i">
+                <app-icon [name]="openStep() === i ? 'chevron' : 'chevron-right'" [size]="14" />
+                {{ openStep() === i ? 'Hide' : 'Show' }} affected hosts
+              </button>
+              @if (orgContext.canTriageFindings() && members().length) {
+                <select
+                  class="assign"
+                  aria-label="Assign every issue in this step"
+                  [disabled]="assigningStep() === i"
+                  (change)="assignAll(step, i, $any($event.target).value); $any($event.target).value = ''"
+                >
+                  <option value="">Assign all to…</option>
+                  @for (member of members(); track member.id) {
+                    <option [value]="member.user_id">{{ member.username }}</option>
+                  }
+                </select>
+              }
+            </div>
+
+            @if (openStep() === i) {
+              <ul class="items">
+                @for (item of step.items; track item.finding) {
+                  <li>
+                    <span class="badge severity-{{ item.severity }}">{{ item.severity }}</span>
+                    <a [routerLink]="['/assets', item.asset]">{{ item.asset_value }}</a>
+                    <a class="issue" [routerLink]="['/findings', item.finding]">{{ item.title }}</a>
+                  </li>
+                }
+              </ul>
+            }
+          </li>
+        }
+      </ol>
+    }
+  }
+</div>
