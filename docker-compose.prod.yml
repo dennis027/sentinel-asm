@@ -1,0 +1,114 @@
+# Production-shaped stack. Differences from docker-compose.yml:
+#   - gunicorn instead of runserver, code baked into the image (no bind mounts)
+#   - Postgres and Redis are not published to the host at all
+#   - one public entrypoint: nginx (`web`) serves the built Angular app
+#     and proxies /api, /admin and /health to the API
+#   - DEBUG is forced off, so DJANGO_SECRET_KEY must be set in .env and
+#     organizations must verify their domain before scanning
+#
+#   docker compose -f docker-compose.prod.yml up --build -d
+#
+# TLS is expected to terminate in front of this (load balancer, Caddy,
+# Cloudflare, ...). When it does, set DJANGO_HTTPS=True in .env.
+name: asm-platform-prod
+
+x-backend: &backend
+  restart: unless-stopped
+  env_file: .env
+  environment: &backend-env
+    DJANGO_DEBUG: "False"
+    # nginx (`web`) is the one trusted proxy in front of the API.
+    NUM_PROXIES: "1"
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    <<: *backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.api
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             python manage.py setup_periodic_tasks &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --access-logfile -"
+    volumes:
+      # Collected admin/Swagger assets, served by nginx.
+      - static_files:/app/staticfiles
+      # Screenshots: written by the worker, read by the API's
+      # authenticated /api/findings/{id}/screenshot/ endpoint.
+      - media_files:/app/media
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  celery-worker:
+    <<: *backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    command: celery -A config worker --loglevel=info
+    volumes:
+      - media_files:/app/media
+
+  celery-beat:
+    <<: *backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.api
+    command: celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    depends_on:
+      # Waits for the API's migrate step -- beat reads its schedule
+      # from tables that don't exist before it.
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-80}:80"
+    volumes:
+      - static_files:/usr/share/nginx/static:ro
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  static_files:
+  media_files:
