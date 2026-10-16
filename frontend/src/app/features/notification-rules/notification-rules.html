@@ -1,53 +1,213 @@
-<div class="page">
+<div class="page narrow">
   <div class="header">
-    <h1>Notification rules</h1>
-    @if (!isAdding()) {
-      <button (click)="showAddForm()">Add rule</button>
+    <div>
+      <h1>Alerts &amp; reports</h1>
+      <p class="muted">Hear about new problems without having to open this app.</p>
+    </div>
+  </div>
+
+  <div class="explain">
+    <div class="tile">
+      <span class="tile-icon"><app-icon name="bell" [size]="18" /></span>
+      <div>
+        <p class="tile-title">Instant alerts</p>
+        <p>
+          When a scan finds a <strong>new</strong> problem, we tell the people or chat channel you choose. Each problem is
+          sent once, not every day it is still there.
+        </p>
+        <p class="tile-foot">{{ rules().length === 0 ? 'None set up yet' : rules().length + ' set up below' }}</p>
+      </div>
+    </div>
+    <div class="tile">
+      <span class="tile-icon"><app-icon name="file" [size]="18" /></span>
+      <div>
+        <p class="tile-title">Monday report</p>
+        <p>
+          Every Monday morning, a one-page PDF: the grade, what changed, the top risks and what to do. Made for people
+          who never log in.
+        </p>
+        <p class="tile-foot">
+          @if (reportRecipients().length) {
+            Going to {{ reportRecipients().length === 1 ? reportRecipients()[0].recipient_email : reportRecipients().length + ' people' }}
+          } @else {
+            Nobody gets it yet: turn on “Monday report” on an email alert
+          }
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-head">
+    <h2>Your alerts</h2>
+    @if (!isAdding() && orgContext.canManageSettings() && rules().length > 0) {
+      <button class="btn" (click)="startAdding()"><app-icon name="plus" [size]="14" /> Add an alert</button>
     }
   </div>
 
-  @if (errorMessage()) {
-    <p class="error">{{ errorMessage() }}</p>
-  }
-
   @if (isAdding()) {
-    <div class="add-form">
-      <input
-        type="email"
-        placeholder="recipient@example.com"
-        [ngModel]="newEmail()"
-        (ngModelChange)="newEmail.set($event)"
-      />
-      <select [ngModel]="newSeverity()" (ngModelChange)="newSeverity.set($event)">
-        <option value="info">Info and above</option>
-        <option value="low">Low and above</option>
-        <option value="medium">Medium and above</option>
-        <option value="high">High and above</option>
-        <option value="critical">Critical only</option>
-      </select>
-      <button (click)="submitNewRule()">Save</button>
-      <button class="secondary" (click)="cancelAdd()">Cancel</button>
-    </div>
+    <form class="panel setup" (ngSubmit)="submitNewRule()">
+      <fieldset>
+        <legend><span class="step">1</span> Where should alerts go?</legend>
+        <div class="choices two">
+          <button type="button" class="choice" [class.selected]="newChannel() === 'email'" (click)="chooseChannel('email')">
+            <app-icon name="mail" [size]="18" />
+            <span><strong>Email</strong><small>A person or a team mailbox</small></span>
+          </button>
+          <button type="button" class="choice" [class.selected]="newChannel() === 'webhook'" (click)="chooseChannel('webhook')">
+            <app-icon name="message" [size]="18" />
+            <span><strong>Chat channel</strong><small>Slack, Microsoft Teams, Mattermost…</small></span>
+          </button>
+        </div>
+
+        @if (newChannel() === 'email') {
+          <label for="destination">Email address</label>
+          <input id="destination" name="destination" type="email" autocomplete="email" placeholder="security@yourcompany.com"
+                 [ngModel]="destination()" (ngModelChange)="destination.set($event)" />
+          @if (myEmail(); as mine) {
+            @if (destination() !== mine) {
+              <button type="button" class="link" (click)="destination.set(mine)">Use my address ({{ mine }})</button>
+            }
+          }
+        } @else {
+          <label for="destination">Channel link (incoming webhook)</label>
+          <input id="destination" name="destination" type="url" placeholder="https://hooks.slack.com/services/…"
+                 [ngModel]="destination()" (ngModelChange)="destination.set($event)" />
+          <button type="button" class="link" (click)="showWebhookHelp.set(!showWebhookHelp())" [attr.aria-expanded]="showWebhookHelp()">
+            {{ showWebhookHelp() ? 'Hide help' : 'How do I get this link?' }}
+          </button>
+          @if (showWebhookHelp()) {
+            <div class="help">
+              <p><strong>Slack</strong>: open <em>api.slack.com/apps</em> → Create app → <em>Incoming Webhooks</em> → turn on →
+                <em>Add New Webhook</em> → pick the channel → copy the link.</p>
+              <p><strong>Microsoft Teams</strong>: in the channel, open <em>Workflows</em> → “Post to a channel when a webhook
+                request is received” → follow the steps → copy the link.</p>
+              <p class="muted">The link works like a password for posting into that channel. Only admins can see it here.</p>
+            </div>
+          }
+        }
+      </fieldset>
+
+      <fieldset>
+        <legend><span class="step">2</span> Which problems?</legend>
+        <div class="choices">
+          @for (level of levels; track level.value) {
+            <button type="button" class="choice level" [class.selected]="newSeverity() === level.value" (click)="newSeverity.set(level.value)">
+              <span class="radio" aria-hidden="true"></span>
+              <span class="level-text">
+                <strong>{{ level.title }}
+                  @if (level.recommended) {
+                    <em class="tag">Recommended</em>
+                  }
+                </strong>
+                <small>{{ level.text }}</small>
+              </span>
+              @if (countFor(level.value); as n) {
+                <span class="count" title="New issues of this kind found in the last 30 days">{{ n }} in the last 30 days</span>
+              } @else if (countFor(level.value) === 0) {
+                <span class="count">none in the last 30 days</span>
+              }
+            </button>
+          }
+        </div>
+      </fieldset>
+
+      @if (newChannel() === 'email') {
+        <fieldset>
+          <legend><span class="step">3</span> The Monday report too?</legend>
+          <label class="choice check-choice">
+            <input type="checkbox" name="weekly" [ngModel]="newWeeklyReport()" (ngModelChange)="newWeeklyReport.set($event)" />
+            <span><strong>Yes, also send the weekly PDF report</strong><small>Good for managers who want the picture without the detail.</small></span>
+          </label>
+        </fieldset>
+      }
+
+      <p class="preview"><app-icon name="check" [size]="16" /> {{ preview() }}</p>
+
+      @if (errorMessage()) {
+        <p class="error" role="alert">{{ errorMessage() }}</p>
+      }
+      <div class="form-actions">
+        <button class="btn" type="submit" [disabled]="!destination().trim() || isSaving()">
+          {{ isSaving() ? 'Saving…' : 'Save alert' }}
+        </button>
+        <button class="btn secondary" type="button" (click)="cancelAdd()">Cancel</button>
+      </div>
+    </form>
   }
 
   @if (isLoading()) {
-    <p class="muted">Loading…</p>
+    <p class="loading">Loading…</p>
   } @else if (rules().length === 0 && !isAdding()) {
-    <p class="muted">No notification rules yet.</p>
-  } @else {
-    <div class="list">
-      @for (rule of rules(); track rule.id) {
-        <div class="row">
-          <div class="details">
-            <p class="email">{{ rule.recipient_email }}</p>
-            <p class="meta muted">Notify on {{ rule.min_severity }} and above</p>
-          </div>
-          <div class="actions">
-            <span class="badge">{{ rule.is_active ? 'Active' : 'Inactive' }}</span>
-            <button class="icon-btn" (click)="deleteRule(rule)" title="Delete">✕</button>
-          </div>
+    <div class="panel empty-start">
+      <span class="tile-icon big"><app-icon name="bell" [size]="22" /></span>
+      <p class="tile-title">No alerts yet</p>
+      @if (orgContext.canManageSettings()) {
+        <p class="muted">Most teams start with one alert for serious problems. It takes a minute.</p>
+        <div class="quick">
+          @if (myEmail(); as mine) {
+            <button class="btn" (click)="startAdding('email', mine)"><app-icon name="mail" [size]="14" /> Email me about serious problems</button>
+          }
+          <button class="btn secondary" (click)="startAdding('webhook')"><app-icon name="message" [size]="14" /> Post to a chat channel</button>
+          <button class="btn secondary" (click)="startAdding()"><app-icon name="plus" [size]="14" /> Another address</button>
         </div>
+      } @else {
+        <p class="muted">An admin of this organization can set them up.</p>
       }
     </div>
+  } @else {
+    <ul class="rules">
+      @for (rule of rules(); track rule.id) {
+        <li class="panel rule" [class.paused]="!rule.is_active">
+          <span class="tile-icon"><app-icon [name]="channelIcon(rule)" [size]="18" /></span>
+          <div class="rule-main">
+            <p class="who">
+              {{ rule.channel === 'webhook' ? chatName(rule.webhook_url) : rule.recipient_email }}
+              @if (!rule.is_active) {
+                <span class="badge">Paused</span>
+              }
+            </p>
+            @if (rule.channel === 'webhook') {
+              <p class="url" [title]="rule.webhook_url">{{ rule.webhook_url }}</p>
+            }
+            <p class="what">
+              {{ rule.channel === 'webhook' ? 'Gets a message' : 'Gets an email' }} when a scan finds new
+              <strong>{{ covers(rule) }}</strong>.
+              @if (rule.weekly_report) {
+                Also gets the <strong>Monday report</strong>.
+              }
+            </p>
+            @if (orgContext.canManageSettings()) {
+              <div class="rule-actions">
+                <button class="btn secondary small" [disabled]="busy()[rule.id] === 'test'" (click)="sendTest(rule)"
+                        title="Send a test message now to check it arrives">
+                  <app-icon name="play" [size]="12" /> {{ busy()[rule.id] === 'test' ? 'Sending…' : 'Send test' }}
+                </button>
+                <button class="btn secondary small" [disabled]="busy()[rule.id] === 'pause'" (click)="togglePaused(rule)">
+                  {{ rule.is_active ? 'Pause' : 'Resume' }}
+                </button>
+                @if (rule.channel === 'email') {
+                  <label class="switch" [title]="'Email the Monday report to ' + rule.recipient_email">
+                    <input type="checkbox" [checked]="rule.weekly_report" (change)="toggleWeeklyReport(rule)" />
+                    <span class="track"><span class="thumb"></span></span>
+                    Monday report
+                  </label>
+                  @if (rule.weekly_report) {
+                    <button class="btn secondary small" [disabled]="busy()[rule.id] === 'report'" (click)="sendReportNow(rule)">
+                      <app-icon name="mail" [size]="12" /> {{ busy()[rule.id] === 'report' ? 'Sending…' : 'Send report now' }}
+                    </button>
+                  }
+                }
+              </div>
+            }
+          </div>
+          @if (orgContext.canManageSettings()) {
+            <button class="icon-btn delete" (click)="deleteRule(rule)" title="Delete alert"
+                    [attr.aria-label]="'Delete alert for ' + (rule.recipient_email || chatName(rule.webhook_url))">
+              <app-icon name="x" [size]="14" />
+            </button>
+          }
+        </li>
+      }
+    </ul>
   }
 </div>
