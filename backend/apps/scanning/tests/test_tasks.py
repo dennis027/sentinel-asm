@@ -21,6 +21,19 @@ from apps.scanning.models import ScanJob
 from apps.scanning.plugins.base import RawFinding
 from apps.scanning.tasks import run_scan_job
 
+# run_scan_job resolves asset hostnames to refuse private targets (see
+# apps/scanning/targets.py). These tests are about orchestration, so
+# keep them off the network; the guard itself is tested in apps/api/tests.py.
+_target_guard = patch("apps.scanning.tasks.assert_public_target")
+
+
+def setUpModule():
+    _target_guard.start()
+
+
+def tearDownModule():
+    _target_guard.stop()
+
 
 def make_fake_scanner(findings=None, applies_to="asset", owned_types=None, raises=None):
     """Builds a fake scanner CLASS (not instance) matching the

@@ -33,6 +33,11 @@ RECORD_TYPES = ["A", "AAAA", "MX", "NS", "TXT"]
 @register_scanner
 class DnsMonitorScanner(BaseScanner):
     name = "dns_monitor"
+    category = "discovery"
+    label = "DNS records"
+    description = (
+        "Records the host's DNS entries so changes show up as new and resolved findings."
+    )
     applies_to = "asset"
     owned_finding_types = [Finding.FindingType.DNS_CHANGE]
 

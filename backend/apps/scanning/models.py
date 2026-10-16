@@ -75,6 +75,11 @@ class ScanJob(models.Model):
         max_length=16, choices=Status.choices, default=Status.PENDING
     )
     celery_task_id = models.CharField(max_length=255, blank=True, default="")
+    # Set on every job started by one "Run scan" click for a whole
+    # domain: one scanner fanned out across all of an organization's
+    # assets. Lets the UI report "1,204 of 41,698 done" for that run.
+    # Null for single-asset triggers and the daily schedule.
+    batch_id = models.UUIDField(null=True, blank=True, db_index=True, editable=False)
 
     idempotency_key = models.CharField(max_length=64, unique=True, editable=False)
 

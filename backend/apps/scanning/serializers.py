@@ -52,8 +52,8 @@ class ScanJobTriggerSerializer(serializers.Serializer):
     def validate(self, attrs):
         if not attrs.get("asset_id") and not attrs.get("organization_id"):
             raise serializers.ValidationError(
-                "Provide either asset_id (for asset-level scanners) or "
-                "organization_id (for org-level scanners like subdomain discovery)."
+                "Provide organization_id to run the scanner for the whole domain, "
+                "or asset_id to run it on one asset."
             )
         if attrs.get("asset_id"):
             try:
@@ -70,6 +70,28 @@ class ScanJobTriggerSerializer(serializers.Serializer):
         return attrs
 
 
+class DomainScanStartedSerializer(serializers.Serializer):
+    """Response when a scanner is started for a whole organization."""
+
+    batch_id = serializers.UUIDField()
+    scanner_name = serializers.CharField()
+    target_count = serializers.IntegerField(help_text="How many scans this run will perform.")
+
+
+class ScanProgressSerializer(serializers.Serializer):
+    """Where one scanner's most recent domain-wide run stands."""
+
+    scanner_name = serializers.CharField()
+    batch_id = serializers.UUIDField()
+    started_at = serializers.DateTimeField()
+    total = serializers.IntegerField()
+    pending = serializers.IntegerField()
+    running = serializers.IntegerField()
+    success = serializers.IntegerField()
+    failed = serializers.IntegerField()
+    finished = serializers.BooleanField()
+
+
 class ScannerInfoSerializer(serializers.Serializer):
     """
     Read-only representation of a registered scanner plugin, for the
@@ -79,5 +101,8 @@ class ScannerInfoSerializer(serializers.Serializer):
     """
 
     name = serializers.CharField()
+    label = serializers.CharField()
+    description = serializers.CharField(allow_blank=True)
+    category = serializers.CharField()
     applies_to = serializers.CharField()
     owned_finding_types = serializers.ListField(child=serializers.CharField())

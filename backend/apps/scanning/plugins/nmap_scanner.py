@@ -27,6 +27,11 @@ DEFAULT_PORT_RANGE = "21-23,25,53,80,110,143,443,465,587,993,995,3306,3389,5432,
 @register_scanner
 class NmapScanner(BaseScanner):
     name = "nmap"
+    category = "network"
+    label = "Port scan"
+    description = (
+        "Checks common ports to see which services are reachable from the internet."
+    )
     applies_to = "asset"
     owned_finding_types = [Finding.FindingType.OPEN_PORT]
 

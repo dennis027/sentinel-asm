@@ -31,6 +31,11 @@ SECURITY_HEADERS = {
 @register_scanner
 class HttpxScanner(BaseScanner):
     name = "httpx"
+    category = "web"
+    label = "Security headers"
+    description = (
+        "Checks the site's HTTP response for missing security headers and notes the server technology."
+    )
     applies_to = "asset"
     owned_finding_types = [Finding.FindingType.MISSING_HEADER]
 

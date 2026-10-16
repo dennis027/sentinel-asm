@@ -19,6 +19,11 @@ from .registry import register_scanner
 @register_scanner
 class SubfinderScanner(BaseScanner):
     name = "subfinder"
+    category = "discovery"
+    label = "Subdomain discovery"
+    description = (
+        "Finds subdomains of your root domain from public sources. Each one becomes an asset you can scan."
+    )
     applies_to = "organization"
     owned_finding_types = [Finding.FindingType.SUBDOMAIN_DISCOVERED]
 

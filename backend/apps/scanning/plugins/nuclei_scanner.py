@@ -33,6 +33,11 @@ NUCLEI_SEVERITY_MAP = {
 @register_scanner
 class NucleiScanner(BaseScanner):
     name = "nuclei"
+    category = "web"
+    label = "Vulnerability scan"
+    description = (
+        "Runs the nuclei template library against the host to detect known vulnerabilities and misconfigurations. Takes several minutes."
+    )
     applies_to = "asset"
     owned_finding_types = [Finding.FindingType.NUCLEI_MATCH]
 

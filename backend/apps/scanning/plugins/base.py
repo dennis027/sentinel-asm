@@ -52,9 +52,11 @@ class RawTechnology:
 
 class BaseScanner(ABC):
     """
-    Subclass this and set the three class attributes below.
+    Subclass this and set the class attributes below.
 
     - name: matches ScanJob.scanner_name, e.g. "ssl_expiry", "nmap"
+    - label / description: human-readable name and one-line summary,
+      shown on the Scanners page
     - applies_to: whether this scanner targets a single Asset or a
       whole Organization (subdomain discovery is org-level; port
       scanning is asset-level)
@@ -66,6 +68,13 @@ class BaseScanner(ABC):
     """
 
     name: str
+    # What people see in the UI instead of the internal name. Optional:
+    # a plugin that sets neither still works and shows up as `name`.
+    label: str = ""
+    description: str = ""
+    # Groups scanners on the Scanners page: discovery, network, web,
+    # encryption or email_domain.
+    category: str = "web"
     applies_to: Literal["asset", "organization"] = "asset"
     owned_finding_types: list[str] = []
 

@@ -20,6 +20,11 @@ from .registry import register_scanner
 @register_scanner
 class SSLExpiryScanner(BaseScanner):
     name = "ssl_expiry"
+    category = "encryption"
+    label = "TLS certificate"
+    description = (
+        "Warns when the site's TLS certificate has expired or is about to."
+    )
     applies_to = "asset"
     owned_finding_types = [Finding.FindingType.EXPIRED_SSL]
 
