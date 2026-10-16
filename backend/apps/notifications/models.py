@@ -25,7 +25,17 @@ class NotificationRule(models.Model):
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name="notification_rules"
     )
-    recipient_email = models.EmailField()
+    class Channel(models.TextChoices):
+        EMAIL = "email", "Email"
+        # An HTTPS endpoint that accepts {"text": "..."} -- the format
+        # Slack, Mattermost, Discord (/slack) and Teams workflows all
+        # take, and the simplest way into a ticketing tool.
+        WEBHOOK = "webhook", "Webhook"
+
+    channel = models.CharField(max_length=16, choices=Channel.choices, default=Channel.EMAIL)
+    # Exactly one of these is set, depending on `channel`.
+    recipient_email = models.EmailField(blank=True, default="")
+    webhook_url = models.URLField(max_length=500, blank=True, default="")
     min_severity = models.CharField(
         max_length=16,
         choices=Finding.Severity.choices,
@@ -33,16 +43,23 @@ class NotificationRule(models.Model):
         help_text="Notify for findings at this severity or higher.",
     )
     is_active = models.BooleanField(default=True)
+    # Email rules only: also send the weekly PDF report to this address
+    # (see apps.notifications.tasks.send_weekly_reports).
+    weekly_report = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["organization", "recipient_email"]
+        ordering = ["organization", "channel", "recipient_email", "webhook_url"]
         constraints = [
             models.UniqueConstraint(
-                fields=["organization", "recipient_email"],
-                name="unique_rule_per_org_recipient",
+                fields=["organization", "recipient_email", "webhook_url"],
+                name="unique_rule_per_org_destination",
             )
         ]
 
+    @property
+    def destination(self) -> str:
+        return self.webhook_url if self.channel == self.Channel.WEBHOOK else self.recipient_email
+
     def __str__(self):
-        return f"{self.recipient_email} @ {self.organization.name} (>= {self.min_severity})"
+        return f"{self.destination} @ {self.organization.name} (>= {self.min_severity})"
