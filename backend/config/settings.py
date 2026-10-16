@@ -6,9 +6,11 @@ environment variables so the same image runs in dev, CI, and prod --
 only the .env / compose config changes.
 """
 
+from datetime import timedelta
 from pathlib import Path
+
 import environ
-from datetime import timedelta  
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -19,9 +21,69 @@ env = environ.Env(
 # env vars are injected directly by docker-compose, so this is a no-op there.
 environ.Env.read_env(BASE_DIR / ".env")
 
-SECRET_KEY = env("DJANGO_SECRET_KEY", default="dev-only-insecure-key-change-me")
-DEBUG = env("DJANGO_DEBUG", default=True)
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["*"])
+# Secure by default: DEBUG is off unless the environment turns it on
+# (.env.example does, for local dev), and outside DEBUG there is no
+# fallback SECRET_KEY -- a deploy that forgot to set one refuses to
+# start instead of quietly signing sessions and JWTs with a public key.
+DEBUG = env.bool("DJANGO_DEBUG", default=False)
+
+_INSECURE_DEV_SECRET_KEY = "dev-only-insecure-key-change-me"
+SECRET_KEY = env("DJANGO_SECRET_KEY", default=_INSECURE_DEV_SECRET_KEY if DEBUG else "")
+if not SECRET_KEY:
+    raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set when DJANGO_DEBUG is off.")
+
+ALLOWED_HOSTS = env.list(
+    "DJANGO_ALLOWED_HOSTS", default=["*"] if DEBUG else ["localhost", "127.0.0.1"]
+)
+
+# How many trusted reverse proxies sit in front of the API. 0 (default)
+# means X-Forwarded-For is client-controlled and is ignored -- both for
+# the login throttle (DRF reads this via REST_FRAMEWORK["NUM_PROXIES"])
+# and for the IPs written to the auth audit log. Set to 1 behind the
+# bundled nginx (docker-compose.prod.yml does).
+NUM_PROXIES = env.int("NUM_PROXIES", default=0)
+
+# Set when the site is served over HTTPS (directly or via a
+# TLS-terminating proxy that sends X-Forwarded-Proto).
+if env.bool("DJANGO_HTTPS", default=False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30
+
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+
+# Bearer token Prometheus must present to scrape /metrics. Unset: the
+# endpoint only works in DEBUG. See config/metrics.py.
+METRICS_TOKEN = env("METRICS_TOKEN", default="")
+
+
+# ---- Scan safety -------------------------------------------------------
+
+# Organizations must prove they control their root domain (DNS TXT
+# record, see Organization.verification_record_*) before anything can
+# be scanned. On by default outside DEBUG; turn off only for a private
+# lab where every user is trusted.
+REQUIRE_DOMAIN_VERIFICATION = env.bool("ASM_REQUIRE_DOMAIN_VERIFICATION", default=not DEBUG)
+
+# Refuse targets that resolve to loopback/private/link-local addresses
+# (see apps/scanning/targets.py). Only enable for scanning your own
+# internal network on purpose.
+ALLOW_PRIVATE_SCAN_TARGETS = env.bool("ASM_ALLOW_PRIVATE_SCAN_TARGETS", default=False)
+
+# Remediation SLA: how many days after a finding first appears it
+# should be fixed, by severity. Drives the "fix by" dates, the overdue
+# count and the weekly report. Info findings have no deadline.
+REMEDIATION_SLA_DAYS = {"critical": 7, "high": 30, "medium": 90, "low": 180}
+
+# How many pages the screenshot scanner captures per asset: the landing
+# page plus the pages it links to on the same host. 1 = landing page only.
+SCREENSHOT_MAX_PAGES = env.int("ASM_SCREENSHOT_MAX_PAGES", default=6)
+
+# A scan job still unfinished after this long is assumed dead and
+# marked failed by reap_stale_scan_jobs. Must stay above
+# CELERY_TASK_TIME_LIMIT below.
+SCAN_JOB_STALE_AFTER_MINUTES = env.int("ASM_SCAN_JOB_STALE_AFTER_MINUTES", default=30)
 
 
 # ---- Applications -----------------------------------------------------
@@ -123,14 +185,17 @@ REST_FRAMEWORK = {
         # Session/Basic stay enabled too: Session keeps the browsable API
         # and /admin/ working, Basic keeps curl/script testing simple.
         "rest_framework_simplejwt.authentication.JWTAuthentication",
+        # Read-only keys for integrations (Authorization: Api-Key ...).
+        "apps.api.authentication.ApiKeyAuthentication",
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.BasicAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "DEFAULT_PAGINATION_CLASS": "config.pagination.DefaultPagination",
     "PAGE_SIZE": 25,
+    "NUM_PROXIES": NUM_PROXIES,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     # Brute-force protection on login: 5 attempts per minute per IP.
     # Scoped specifically to LoginView (throttle_scope="login") rather
@@ -138,11 +203,10 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "login": "5/min",
     },
-
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "ASM Platform API",
+    "TITLE": "Densight API",
     "DESCRIPTION": "Attack surface management: assets, scan jobs, and findings.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
@@ -153,6 +217,9 @@ SPECTACULAR_SETTINGS = {
     # actually the same choice set.
     "ENUM_NAME_OVERRIDES": {
         "MinSeverityEnum": "apps.findings.models.Finding.Severity",
+        # Both models have a field called "status" with different choices.
+        "FindingStatusEnum": "apps.findings.models.Finding.Status",
+        "ScanJobStatusEnum": "apps.scanning.models.ScanJob.Status",
     },
 }
 
@@ -185,7 +252,7 @@ EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")   
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="alerts@sentinel-asm.local")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="alerts@densight.local")
 
 EMAIL_BACKEND = env(
     "EMAIL_BACKEND",
@@ -248,6 +315,12 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
+# Hard ceiling on any single task. The slowest scanner (nuclei) gives
+# its subprocess 10 minutes; the soft limit raises inside the task so
+# the job is recorded as failed/retrying, the hard limit kills a task
+# that ignores it.
+CELERY_TASK_SOFT_TIME_LIMIT = 14 * 60
+CELERY_TASK_TIME_LIMIT = 15 * 60
 CELERY_TASK_ROUTES = {}  # populated as scanning/reports tasks are added
 # DatabaseScheduler stores periodic task definitions in Postgres (via
 # django_celery_beat) rather than a static dict in this settings file --
