@@ -1,0 +1,53 @@
+:host { display: block; }
+
+.empty {
+  padding: var(--space-6) var(--space-5);
+}
+
+.art {
+  display: block;
+  margin: 0 auto var(--space-3);
+}
+
+.ground { fill: var(--color-surface-alt); }
+.soft { fill: var(--color-accent-bg); }
+.line { stroke: var(--color-accent-border); stroke-width: 1.5; }
+.sweep { fill: var(--color-accent); opacity: 0.25; }
+
+.stroke {
+  stroke: var(--color-accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+
+  &.thin { stroke: var(--color-border-strong); stroke-width: 2.5; }
+  &.accent { stroke-width: 4; }
+}
+
+.card {
+  fill: var(--color-surface);
+  stroke: var(--color-border-strong);
+  stroke-width: 2;
+
+  &.dashed { fill: none; stroke-dasharray: 4 4; }
+}
+
+.dot {
+  fill: var(--color-accent);
+
+  &.faint { opacity: 0.45; }
+}
+
+.title {
+  margin: 0 0 var(--space-1);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.body {
+  margin: 0 auto;
+  max-width: 420px;
+
+  &:empty { display: none; }
+}

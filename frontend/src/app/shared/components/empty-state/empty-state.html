@@ -1,0 +1,46 @@
+<div class="empty">
+  <svg class="art" width="132" height="96" viewBox="0 0 132 96" fill="none" aria-hidden="true">
+    <ellipse class="ground" cx="66" cy="86" rx="46" ry="5" />
+    @switch (art()) {
+      @case ('radar') {
+        <circle class="soft" cx="66" cy="46" r="36" />
+        <circle class="line" cx="66" cy="46" r="36" />
+        <circle class="line" cx="66" cy="46" r="24" />
+        <circle class="line" cx="66" cy="46" r="12" />
+        <path class="sweep" d="M66 46 L66 10 A36 36 0 0 1 97.2 28 Z" />
+        <path class="stroke" d="M66 46 L97.2 28" />
+        <circle class="dot" cx="66" cy="46" r="3.5" />
+        <circle class="dot faint" cx="46" cy="58" r="3" />
+        <circle class="dot faint" cx="84" cy="62" r="2.5" />
+      }
+      @case ('servers') {
+        <rect class="card" x="30" y="14" width="72" height="22" rx="6" />
+        <rect class="card" x="30" y="42" width="72" height="22" rx="6" />
+        <rect class="card dashed" x="30" y="70" width="72" height="12" rx="6" />
+        <circle class="dot" cx="42" cy="25" r="3" />
+        <circle class="dot faint" cx="42" cy="53" r="3" />
+        <path class="stroke thin" d="M54 25h36M54 53h26" />
+      }
+      @case ('bell') {
+        <circle class="soft" cx="66" cy="44" r="34" />
+        <path class="card" d="M48 58c4-4 5-10 5-18a13 13 0 0 1 26 0c0 8 1 14 5 18H48Z" />
+        <path class="stroke" d="M60 64a6 6 0 0 0 12 0" />
+        <path class="stroke" d="M66 23v4" />
+        <circle class="dot" cx="82" cy="30" r="5" />
+      }
+      @case ('shield') {
+        <circle class="soft" cx="66" cy="44" r="36" />
+        <path class="card" d="M66 14 44 22v18c0 15 9.3 27 22 32 12.7-5 22-17 22-32V22l-22-8Z" />
+        <path class="stroke accent" d="m56 43 7.5 7.500L77 36" />
+      }
+      @case ('search') {
+        <circle class="soft" cx="60" cy="42" r="30" />
+        <circle class="card" cx="60" cy="42" r="20" />
+        <path class="stroke" d="m75 57 16 16" />
+        <path class="stroke thin" d="M52 42h16" />
+      }
+    }
+  </svg>
+  <p class="title">{{ title() }}</p>
+  <p class="body"><ng-content /></p>
+</div>

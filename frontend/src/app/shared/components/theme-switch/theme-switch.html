@@ -1,0 +1,13 @@
+<div class="switch" role="group" aria-label="Colour theme">
+  @for (option of options; track option.value) {
+    <button
+      [class.active]="theme.preference() === option.value"
+      [attr.aria-pressed]="theme.preference() === option.value"
+      [title]="option.label"
+      [attr.aria-label]="option.label"
+      (click)="theme.set(option.value)"
+    >
+      <app-icon [name]="option.icon" [size]="16" />
+    </button>
+  }
+</div>

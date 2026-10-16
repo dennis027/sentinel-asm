@@ -1,29 +1,70 @@
+// ---------------------------------------------------------------------
+// Design system. Everything shared between pages lives here: tokens,
+// typography, buttons, form controls, cards, tables, badges and the
+// page frame. Component stylesheets only hold what is unique to them.
+// ---------------------------------------------------------------------
+
+// Light is the base. Dark overrides the same tokens, either because the
+// user picked it (data-theme="dark") or because the system asks for it
+// and the user hasn't picked light.
+
 :root {
+  color-scheme: light;
+
   // Surfaces
-  --color-bg: #fafafa;
+  --color-bg: #f5f6f8;
   --color-surface: #ffffff;
-  --color-surface-alt: #f4f5f7;
-  --color-border: #e5e7eb;
+  --color-surface-alt: #f1f3f6;
+  --color-row-hover: #fafbfc;
+  --color-border: #e3e6eb;
+  --color-border-strong: #cfd4dc;
 
   // Text
   --color-text-primary: #111827;
-  --color-text-secondary: #6b7280;
-  --color-text-muted: #9ca3af;
+  --color-text-secondary: #5b6472;
+  --color-text-muted: #8a94a3;
 
   // Accent
   --color-accent: #4f46e5;
   --color-accent-bg: #eef2ff;
+  --color-accent-border: #c7d2fe;
   --color-accent-hover: #4338ca;
+  --color-link: #4f46e5;
 
-  // Semantic (severity + risk grade)
-  --color-danger: #dc2626;
-  --color-danger-bg: #fee2e2;
-  --color-warning: #d97706;
-  --color-warning-bg: #fef3c7;
-  --color-success: #059669;
-  --color-success-bg: #d1fae5;
-  --color-info: #2563eb;
-  --color-info-bg: #dbeafe;
+  // Semantic (text colour + tinted background pairs)
+  --color-danger: #c81e1e;
+  --color-danger-bg: #fde8e8;
+  --color-danger-solid: #c81e1e;
+  --color-serious: #b54708;
+  --color-serious-bg: #ffead5;
+  --color-warning: #8a6100;
+  --color-warning-bg: #fdf3c8;
+  --color-warning-border: #f1dc8a;
+  --color-success: #046c4e;
+  --color-success-bg: #def7ec;
+  --color-info: #1e56b0;
+  --color-info-bg: #e1effe;
+
+  // Data marks (dashboard meter and severity bars)
+  --meter-good: #0e9f6e;
+  --meter-warn: #d69e06;
+  --meter-bad: #d03b3b;
+  --bar-critical: #b42318;
+  --bar-high: #d9503f;
+  --bar-medium: #e8857a;
+  --bar-low: #f1b3ab;
+  --bar-info: #b8c0cc;
+
+  // Sidebar and toasts stay dark in both themes
+  --sidebar-bg: #111827;
+  --sidebar-text: #aeb6c4;
+  --sidebar-text-muted: #7b8494;
+  --sidebar-text-strong: #ffffff;
+  --sidebar-hover: #1f2937;
+  --sidebar-border: #273142;
+  --toast-bg: #111827;
+
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235b6472' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 
   // Radius
   --radius-sm: 6px;
@@ -31,8 +72,8 @@
   --radius-lg: 14px;
 
   // Shadow
-  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
-  --shadow-md: 0 2px 8px rgba(16, 24, 40, 0.08);
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
 
   // Spacing
   --space-1: 4px;
@@ -43,6 +84,69 @@
   --space-6: 32px;
 }
 
+@mixin dark-theme {
+  color-scheme: dark;
+
+  --color-bg: #0e131d;
+  --color-surface: #161c29;
+  --color-surface-alt: #1e2636;
+  --color-row-hover: #1a2130;
+  --color-border: #283144;
+  --color-border-strong: #3a455c;
+
+  --color-text-primary: #e8ecf3;
+  --color-text-secondary: #a6b0c0;
+  --color-text-muted: #7c8799;
+
+  --color-accent: #5b5fe9;
+  --color-accent-bg: #222a52;
+  --color-accent-border: #3b448a;
+  --color-accent-hover: #7175f0;
+  --color-link: #a5b4fc;
+
+  --color-danger: #fca5a5;
+  --color-danger-bg: #4a1d20;
+  --color-serious: #fdba74;
+  --color-serious-bg: #4a2a12;
+  --color-warning: #fcd34d;
+  --color-warning-bg: #40350f;
+  --color-warning-border: #6b5a1c;
+  --color-success: #6ee7b7;
+  --color-success-bg: #0f3b2e;
+  --color-info: #93c5fd;
+  --color-info-bg: #1a2f52;
+
+  // On a dark surface the worst severity is the brightest, not the darkest.
+  --meter-good: #34d399;
+  --meter-warn: #fbbf24;
+  --meter-bad: #f87171;
+  --bar-critical: #f97066;
+  --bar-high: #d9503f;
+  --bar-medium: #a8443b;
+  --bar-low: #74383a;
+  --bar-info: #4b566b;
+
+  --sidebar-bg: #0a0e16;
+  --sidebar-hover: #171d2b;
+  --sidebar-border: #1f2738;
+  --toast-bg: #2a3346;
+
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a6b0c0' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme='dark'] {
+  @include dark-theme;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    @include dark-theme;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -50,25 +154,212 @@
 html, body {
   margin: 0;
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
   background: var(--color-bg);
   color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
 }
 
-input, select, button {
-  font-family: inherit;
+h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+h2 {
+  margin: 0 0 var(--space-3);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+p { margin: 0 0 var(--space-3); }
+
+a {
+  color: var(--color-link);
+  text-decoration: none;
+
+  &:hover { text-decoration: underline; }
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+
+// ---------------- Page frame ----------------
+
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-6);
+
+  // Forms and settings read better in a narrower column, but keep the
+  // same left edge as the wide pages so nothing jumps between them.
+  &.narrow > * { max-width: 780px; }
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+
+  p { margin: 4px 0 0; }
+
+  // The title takes the room it needs and the actions keep to the
+  // right on one line; on a narrow screen they drop below and wrap.
+  > :first-child { flex: 1 1 360px; min-width: 0; }
+  > :not(:first-child) { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+}
+
+.muted { color: var(--color-text-secondary); }
+
+// The "sight" in Densight: the brand colour, lighter on dark backgrounds.
+.brand-accent { color: var(--color-link); }
+.hint { color: var(--color-text-secondary); font-size: 12.5px; }
+
+.error {
+  color: var(--color-danger);
+  font-size: 13px;
+}
+
+// A list or page that is still fetching.
+.loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-text-secondary);
+  padding: var(--space-5) 0;
+
+  &::before {
+    content: '';
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--color-border-strong);
+    border-top-color: var(--color-accent);
+    animation: spin 0.7s linear infinite;
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+// "Nothing here" message, with room for a link to the next step.
+.empty {
+  margin: 0;
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+
+// ---------------- Buttons ----------------
+
+button {
+  font: inherit;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: none;
+  color: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 var(--space-4);
+  font-size: 13.5px;
+  font-weight: 550;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+
+  &:hover { text-decoration: none; }
+  &:hover:not(:disabled) { background: var(--color-accent-hover); }
+
+  &.secondary {
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border-strong);
+
+    &:hover:not(:disabled) { background: var(--color-surface-alt); }
+  }
+
+  &.danger {
+    background: var(--color-danger-solid);
+
+    &:hover:not(:disabled) { filter: brightness(0.9); background: var(--color-danger-solid); }
+  }
+
+  &.small {
+    height: 30px;
+    padding: 0 var(--space-3);
+    font-size: 12.5px;
+  }
+
+  &.block { width: 100%; }
+}
+
+.icon-btn {
+  width: 28px;
+  height: 28px;
+  color: var(--color-text-muted);
+
+  &:hover {
+    background: var(--color-danger-bg);
+    color: var(--color-danger);
+  }
+}
+
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+// ---------------- Form controls ----------------
+
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 550;
+  margin: 0 0 var(--space-1);
 }
 
 input, select {
-  border: 1px solid var(--color-border);
+  font: inherit;
+  font-size: 13.5px;
+  height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text-primary);
-  padding: 0 var(--space-3);
-  height: 34px;
-  font-size: 13px;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &::placeholder { color: var(--color-text-muted); }
 
   &:focus {
     outline: none;
@@ -77,14 +368,146 @@ input, select {
   }
 }
 
-button {
-  font-size: 13px;
-  border: none;
-  border-radius: var(--radius-sm);
+select {
+  appearance: none;
+  padding-right: 32px;
+  background-image: var(--chevron);
+  background-repeat: no-repeat;
+  background-position: right 10px center;
   cursor: pointer;
-  transition: background 0.15s ease, opacity 0.15s ease;
 }
 
+// Filters above a list.
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+
+  input[type='search'], input[type='text'] { flex: 1; min-width: 180px; max-width: 320px; }
+}
+
+// A set of mutually exclusive views ("Open | Triaged | Resolved").
+.toggle {
+  display: inline-flex;
+  padding: 3px;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+
+  button {
+    height: 28px;
+    padding: 0 var(--space-3);
+    font-size: 13px;
+    font-weight: 550;
+    color: var(--color-text-secondary);
+    border-radius: 4px;
+
+    &.active {
+      background: var(--color-surface);
+      color: var(--color-text-primary);
+      box-shadow: var(--shadow-sm);
+    }
+  }
+}
+
+// ---------------- Cards ----------------
+
+.card, .panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-5);
+}
+
+.panel + .panel,
+.panel + form.panel,
+form.panel + .panel { margin-top: var(--space-4); }
+
+.panel-title {
+  margin: 0 0 var(--space-4);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+// ---------------- Tables ----------------
+
 table {
-  border-collapse: collapse;
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13.5px;
+}
+
+// A table standing on its own gets the card frame; one inside a panel
+// already has it.
+.page > table {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+
+  th { background: var(--color-surface-alt); padding-top: var(--space-3); }
+  th:first-child, td:first-child { padding-left: var(--space-5); }
+  th:last-child, td:last-child { padding-right: var(--space-5); }
+}
+
+th {
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  padding: 0 var(--space-3) var(--space-3);
+  white-space: nowrap;
+}
+
+td {
+  padding: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+tbody tr:hover td { background: var(--color-row-hover); }
+
+// ---------------- Badges ----------------
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+
+  // Values that arrive as lowercase words from the API ("critical",
+  // "success") get a capital; everything else is written as it reads.
+  &[class*='severity-'], &[class*='status-'] { text-transform: capitalize; }
+  background: var(--color-surface-alt);
+  color: var(--color-text-secondary);
+
+  // tone-*: the same colours for badges whose text isn't a severity.
+  &.severity-critical, &.status-failed, &.grade-D, &.grade-F, &.tone-danger {
+    background: var(--color-danger-bg);
+    color: var(--color-danger);
+  }
+  &.severity-high, &.tone-serious { background: var(--color-serious-bg); color: var(--color-serious); }
+  &.severity-medium, &.status-running, &.status-pending, &.status-retrying, &.pending,
+  &.grade-B, &.grade-C {
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+  }
+  &.severity-low { background: var(--color-info-bg); color: var(--color-info); }
+  &.status-success, &.ok, &.grade-A, &.grade-A\+ {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+  }
 }

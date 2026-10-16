@@ -1,0 +1,37 @@
+@if (confirm.request(); as request) {
+  <!-- Clicking the dimmed area cancels; Escape does too (see component). -->
+  <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->
+  <div class="backdrop" (click)="confirm.answer(false)">
+    <div
+      class="dialog"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="confirm-title"
+      aria-describedby="confirm-message"
+      (click)="$event.stopPropagation()"
+      (keydown.tab)="onTab($event)"
+    >
+      <div class="head">
+        <span class="mark" [class.danger]="request.danger">
+          <app-icon [name]="request.icon ?? (request.danger ? 'findings' : 'play')" [size]="20" />
+        </span>
+        <h2 id="confirm-title">{{ request.title }}</h2>
+      </div>
+
+      <div id="confirm-message" class="message">
+        @for (paragraph of paragraphs(); track $index) {
+          <p>{{ paragraph }}</p>
+        }
+      </div>
+
+      <div class="actions">
+        <button #cancelButton class="btn secondary" (click)="confirm.answer(false)">
+          {{ request.cancelLabel ?? 'Cancel' }}
+        </button>
+        <button #confirmButton class="btn" [class.danger]="request.danger" (click)="confirm.answer(true)">
+          {{ request.confirmLabel }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
