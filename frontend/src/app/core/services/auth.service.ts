@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { Observable, tap } from 'rxjs';
+import { Observable, finalize, shareReplay, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 interface TokenPair {
@@ -26,6 +26,8 @@ export class AuthService {
   private readonly refreshToken = signal<string | null>(localStorage.getItem(REFRESH_TOKEN_KEY));
   private readonly username = signal<string | null>(localStorage.getItem(USERNAME_KEY));
 
+  private refreshInFlight: Observable<TokenPair> | null = null;
+
   readonly isAuthenticated = computed(() => this.accessToken() !== null);
   readonly currentUsername = computed(() => this.username());
 
@@ -33,9 +35,13 @@ export class AuthService {
     return this.accessToken();
   }
 
-  login(username: string, password: string): Observable<TokenPair> {
+  /**
+   * With two-factor sign-in on, the first attempt (no `otp`) fails with
+   * 400 and `otp_required: true`; send the same request again with the code.
+   */
+  login(username: string, password: string, otp?: string): Observable<TokenPair> {
     return this.http
-      .post<TokenPair>(`${environment.apiBaseUrl}/auth/login/`, { username, password })
+      .post<TokenPair>(`${environment.apiBaseUrl}/auth/login/`, { username, password, ...(otp ? { otp } : {}) })
       .pipe(
         tap((tokens) => {
           this.setSession(tokens.access, tokens.refresh, username);
@@ -54,21 +60,35 @@ export class AuthService {
     this.router.navigate(['/login']);
   }
 
+  /**
+   * Every caller that asks while a refresh is already in flight gets
+   * that same request's result. This matters because refresh tokens
+   * are single-use (the backend rotates and blacklists them): a page
+   * that fires several requests at once gets several 401s when the
+   * access token expires, and if each one refreshed on its own, the
+   * first would succeed and the rest would present an already-spent
+   * token, fail, and log the user out.
+   */
   refreshAccessToken(): Observable<TokenPair> {
-    return this.http
-      .post<TokenPair>(`${environment.apiBaseUrl}/token/refresh/`, {
-        refresh: this.refreshToken(),
-      })
-      .pipe(
-        tap((tokens) => {
-          this.accessToken.set(tokens.access);
-          localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access);
-          if (tokens.refresh) {
-            this.refreshToken.set(tokens.refresh);
-            localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh);
-          }
-        }),
-      );
+    if (!this.refreshInFlight) {
+      this.refreshInFlight = this.http
+        .post<TokenPair>(`${environment.apiBaseUrl}/token/refresh/`, {
+          refresh: this.refreshToken(),
+        })
+        .pipe(
+          tap((tokens) => {
+            this.accessToken.set(tokens.access);
+            localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access);
+            if (tokens.refresh) {
+              this.refreshToken.set(tokens.refresh);
+              localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh);
+            }
+          }),
+          finalize(() => (this.refreshInFlight = null)),
+          shareReplay({ bufferSize: 1, refCount: false }),
+        );
+    }
+    return this.refreshInFlight;
   }
 
   changePassword(currentPassword: string, newPassword: string): Observable<{ detail: string }> {

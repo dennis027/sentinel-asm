@@ -1,8 +1,10 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Organization } from '../models/models';
+import { OrgRole, Organization } from '../models/models';
 import { OrganizationService } from './organization-service';
 
 const SELECTED_ORG_KEY = 'sentinel_selected_org_id';
+
+const ROLE_RANK: Record<OrgRole, number> = { viewer: 0, analyst: 1, admin: 2, owner: 3 };
 
 /**
  * Single source of truth for "which organization is currently
@@ -34,10 +36,20 @@ export class OrganizationContextService {
   });
 
   readonly isLoaded = signal(false);
+  readonly loadFailed = signal(false);
+
+  // What the user may do in the selected organization. The API
+  // enforces all of this regardless -- these only decide which
+  // buttons are worth showing.
+  readonly canTriggerScans = computed(() => this.hasRole('analyst'));
+  readonly canTriageFindings = computed(() => this.hasRole('analyst'));
+  readonly canManageSettings = computed(() => this.hasRole('admin'));
 
   /** Called once, from the Shell, when an authenticated session starts. */
   loadOrganizations(): void {
+    this.loadFailed.set(false);
     this.orgService.list().subscribe({
+      error: () => this.loadFailed.set(true),
       next: (page) => {
         this.organizations.set(page.results);
         const stillValid = page.results.some((o) => o.id === this.selectedOrgId());
@@ -54,10 +66,34 @@ export class OrganizationContextService {
     localStorage.setItem(SELECTED_ORG_KEY, orgId);
   }
 
+  /** Adds a just-created organization and switches to it. */
+  addOrganization(created: Organization): void {
+    this.organizations.update((orgs) =>
+      [...orgs, created].sort((a, b) => a.name.localeCompare(b.name)),
+    );
+    this.selectOrganization(created.id);
+  }
+
+  /** Drops an organization the user has left or deleted. */
+  removeOrganization(orgId: string): void {
+    this.organizations.update((orgs) => orgs.filter((o) => o.id !== orgId));
+  }
+
+  /** Swaps in a fresh copy of one organization (e.g. after verifying its domain). */
+  updateOrganization(updated: Organization): void {
+    this.organizations.update((orgs) => orgs.map((o) => (o.id === updated.id ? updated : o)));
+  }
+
+  private hasRole(minimum: OrgRole): boolean {
+    const role = this.selectedOrganization()?.my_role;
+    return !!role && ROLE_RANK[role] >= ROLE_RANK[minimum];
+  }
+
   clear(): void {
     this.organizations.set([]);
     this.selectedOrgId.set(null);
     this.isLoaded.set(false);
+    this.loadFailed.set(false);
     localStorage.removeItem(SELECTED_ORG_KEY);
   }
 }

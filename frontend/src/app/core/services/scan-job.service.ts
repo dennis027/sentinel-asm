@@ -2,7 +2,13 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { Paginated, ScanJob, TriggerScanRequest } from '../models/models';
+import {
+  DomainScanStarted,
+  Paginated,
+  ScanJob,
+  ScanProgress,
+  TriggerScanRequest,
+} from '../models/models';
 
 /**
  * Pattern used by every other resource service (AssetService,
@@ -14,10 +20,12 @@ export class ScanJobService {
   private readonly http = inject(HttpClient);
   private readonly base = `${environment.apiBaseUrl}/scan-jobs`;
 
-  list(filters: { organization?: string; asset?: string; status?: string } = {}): Observable<Paginated<ScanJob>> {
+  list(
+    filters: { organization?: string; asset?: string; status?: string; page?: number } = {},
+  ): Observable<Paginated<ScanJob>> {
     let params = new HttpParams();
     for (const [key, value] of Object.entries(filters)) {
-      if (value) params = params.set(key, value);
+      if (value) params = params.set(key, String(value));
     }
     return this.http.get<Paginated<ScanJob>>(this.base + '/', { params });
   }
@@ -26,8 +34,28 @@ export class ScanJobService {
     return this.http.get<ScanJob>(`${this.base}/${id}/`);
   }
 
+  /** Runs a scanner on ONE asset. */
   trigger(request: TriggerScanRequest): Observable<ScanJob> {
     return this.http.post<ScanJob>(`${this.base}/trigger/`, request);
+  }
+
+  /**
+   * Runs a scanner for the whole domain: once for an organization-level
+   * scanner, once per asset for the others. Returns straight away;
+   * follow it with progress().
+   */
+  runForOrganization(scannerName: string, organizationId: string): Observable<DomainScanStarted> {
+    return this.http.post<DomainScanStarted>(`${this.base}/trigger/`, {
+      scanner_name: scannerName,
+      organization_id: organizationId,
+    });
+  }
+
+  /** Each scanner's most recent domain-wide run for this organization. */
+  progress(organizationId: string): Observable<ScanProgress[]> {
+    return this.http.get<ScanProgress[]>(`${this.base}/progress/`, {
+      params: { organization: organizationId },
+    });
   }
 
   /**
@@ -59,17 +87,15 @@ export class ScanJobService {
   }
 
 
-    /** Re-runs a past scan job with the exact same target, bypassing
-   * same-day idempotency (force: true) so it genuinely re-executes
-   * even if it already ran today. */
-  rerun(job: ScanJob): Observable<ScanJob> {
-    return this.trigger({
-      scanner_name: job.scanner_name,
-      asset_id: job.asset ?? undefined,
-      organization_id: job.asset ? undefined : job.organization,
-      force: true,
-    });
+  /**
+   * Re-runs a past scan. An asset scan is repeated on that asset
+   * (force: true, so it really runs even if it already did today); an
+   * organization-level one is started again for the organization.
+   */
+  rerun(job: ScanJob): Observable<ScanJob | DomainScanStarted> {
+    if (!job.asset) {
+      return this.runForOrganization(job.scanner_name, job.organization);
+    }
+    return this.trigger({ scanner_name: job.scanner_name, asset_id: job.asset, force: true });
   }
-
-  
 }
