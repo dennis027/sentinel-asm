@@ -1,0 +1,92 @@
+<div class="home">
+  <header class="top">
+    <a class="brand" routerLink="/">
+      <app-logo-mark class="brand-mark" [size]="32" />
+      <span>Den<span class="brand-accent">sight</span></span>
+    </a>
+    <div class="top-actions">
+      <app-theme-switch />
+      <a class="btn secondary" routerLink="/login">Sign in</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow">Attack surface monitoring</p>
+      <h1>Know everything you expose to the internet, and what to fix first.</h1>
+      <p class="lead">
+        Densight finds every host under your domain, checks each one for open doors, and tells you
+        what changed since last time.
+      </p>
+      <div class="hero-actions">
+        <a class="btn large" routerLink="/login">Sign in</a>
+        <a class="btn secondary large" href="#how-it-works">How it works</a>
+      </div>
+
+      <div class="window">
+        <div class="window-bar" aria-hidden="true"><span></span><span></span><span></span></div>
+        <img class="shot shot-light" src="landing/dashboard-light.png" alt="The Densight dashboard: a risk grade, what changed in the last 7 days, and the most severe open issues" />
+        <img class="shot shot-dark" src="landing/dashboard-dark.png" alt="" aria-hidden="true" />
+      </div>
+    </section>
+
+    <section class="band">
+      <h2>You can only protect what you know about</h2>
+      <div class="cards">
+        @for (problem of problems; track problem.title) {
+          <div class="card">
+            <span class="card-icon"><app-icon [name]="problem.icon" [size]="20" /></span>
+            <h3>{{ problem.title }}</h3>
+            <p>{{ problem.text }}</p>
+          </div>
+        }
+      </div>
+    </section>
+
+    <section id="how-it-works" class="band">
+      <h2>How it works</h2>
+      <ol class="steps">
+        @for (step of steps; track step.title; let i = $index) {
+          <li>
+            <span class="step-number">{{ i + 1 }}</span>
+            <h3>{{ step.title }}</h3>
+            <p>{{ step.text }}</p>
+          </li>
+        }
+      </ol>
+    </section>
+
+    @for (feature of features; track feature.title; let odd = $odd) {
+      <section class="band feature" [class.flip]="odd">
+        <div class="feature-text">
+          <h2>{{ feature.title }}</h2>
+          <p>{{ feature.text }}</p>
+          <ul>
+            @for (point of feature.points; track point) {
+              <li><app-icon name="check" [size]="16" /> {{ point }}</li>
+            }
+          </ul>
+        </div>
+        <div class="window">
+          <div class="window-bar" aria-hidden="true"><span></span><span></span><span></span></div>
+          <img class="shot shot-light" [src]="'landing/' + feature.image + '-light.png'" [alt]="feature.title" loading="lazy" />
+          <img class="shot shot-dark" [src]="'landing/' + feature.image + '-dark.png'" alt="" aria-hidden="true" loading="lazy" />
+        </div>
+      </section>
+    }
+
+    <section class="band closing">
+      <h2>A report for people who will never log in</h2>
+      <p>
+        One click produces a short PDF: the grade, what changed this week, and the ten issues most
+        worth fixing, each with what to do about it.
+      </p>
+      <a class="btn large" routerLink="/login">Sign in to get started</a>
+    </section>
+  </main>
+
+  <footer class="bottom">
+    <span>Densight · {{ year }}</span>
+    <span>Only scan what you own. Domains are verified by DNS record before anything is scanned.</span>
+  </footer>
+</div>

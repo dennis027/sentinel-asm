@@ -1,43 +1,107 @@
 <div class="login-page">
-  <div class="login-card">
-    <div class="brand">
-      <span class="brand-name">Sentinel ASM</span>
+  <section class="hero" aria-hidden="true">
+    <div class="hero-inner">
+      <div class="brand">
+        <app-logo-mark class="brand-mark" [size]="32" />
+        <span class="brand-name">Den<span class="brand-accent">sight</span></span>
+      </div>
+
+      <svg class="hero-art" viewBox="0 0 360 300" fill="none">
+        <circle class="ring" cx="180" cy="150" r="130" />
+        <circle class="ring" cx="180" cy="150" r="92" />
+        <circle class="ring" cx="180" cy="150" r="54" />
+        <path class="axis" d="M50 150h260M180 20v260" />
+        <path class="sweep" d="M180 150 L180 20 A130 130 0 0 1 292.6 85 Z" />
+        <path class="beam" d="M180 150 L292.6 85" />
+
+        <!-- discovered hosts: safe, needs attention, critical -->
+        <circle class="node ok" cx="118" cy="104" r="7" />
+        <circle class="node ok" cx="232" cy="212" r="7" />
+        <circle class="node ok" cx="96" cy="196" r="6" />
+        <circle class="node warn" cx="248" cy="128" r="8" />
+        <circle class="pulse" cx="214" cy="78" r="16" />
+        <circle class="node bad" cx="214" cy="78" r="8" />
+        <path class="link" d="M180 150 118 104M180 150l52 62M180 150l68-22M180 150l34-72M180 150 96 196" />
+
+        <circle class="core" cx="180" cy="150" r="22" />
+        <path class="core-mark" d="M180 137l-10 3.8v7.6c0 6.300 4.200 11.700 10 13.600 5.800-1.900 10-7.300 10-13.600v-7.6l-10-3.8Z" />
+      </svg>
+
+      <h2>See your attack surface the way an attacker does.</h2>
+      <ul>
+        <li><app-icon name="globe" [size]="16" /> Discover every host under your domain</li>
+        <li><app-icon name="bug" [size]="16" /> Find open ports, weak TLS and known vulnerabilities</li>
+        <li><app-icon name="bell" [size]="16" /> Hear about new findings as they appear</li>
+      </ul>
     </div>
+  </section>
 
-    <h1>Sign in</h1>
-    <p class="subtitle">Monitor your attack surface.</p>
-    @if (infoMessage()) {
+  <section class="form-side">
+    <app-theme-switch class="theme" />
+    <div class="login-card">
+      <div class="brand compact">
+        <app-logo-mark class="brand-mark" [size]="32" />
+        <span class="brand-name">Den<span class="brand-accent">sight</span></span>
+      </div>
+
+      <a class="back" routerLink="/">← What is Densight?</a>
+
+      <h1>Sign in</h1>
+      <p class="subtitle">Welcome back. Enter your details to continue.</p>
+      @if (infoMessage()) {
         <p class="info">{{ infoMessage() }}</p>
-    }
-
-    <form (ngSubmit)="submit()">
-      <label for="username">Username</label>
-      <input
-        id="username"
-        type="text"
-        name="username"
-        autocomplete="username"
-        [ngModel]="username()"
-        (ngModelChange)="username.set($event)"
-      />
-
-      <label for="password">Password</label>
-      <input
-        id="password"
-        type="password"
-        name="password"
-        autocomplete="current-password"
-        [ngModel]="password()"
-        (ngModelChange)="password.set($event)"
-      />
-
-      @if (errorMessage()) {
-        <p class="error">{{ errorMessage() }}</p>
       }
 
-      <button type="submit" [disabled]="isSubmitting()">
-        {{ isSubmitting() ? 'Signing in…' : 'Sign in' }}
-      </button>
-    </form>
-  </div>
+      <form (ngSubmit)="submit()">
+        @if (needsCode()) {
+          <p class="two-factor">
+            <app-icon name="smartphone" [size]="18" />
+            Enter the 6-digit code from your authenticator app for <strong>{{ username() }}</strong>.
+          </p>
+          <label for="code">Code</label>
+          <input
+            id="code"
+            name="code"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="6"
+            placeholder="123456"
+            [ngModel]="code()"
+            (ngModelChange)="code.set($event)"
+          />
+        } @else {
+          <label for="username">Username</label>
+          <input
+            id="username"
+            type="text"
+            name="username"
+            autocomplete="username"
+            [ngModel]="username()"
+            (ngModelChange)="username.set($event)"
+          />
+
+          <label for="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            name="password"
+            autocomplete="current-password"
+            [ngModel]="password()"
+            (ngModelChange)="password.set($event)"
+          />
+        }
+
+        @if (errorMessage()) {
+          <p class="error" role="alert">{{ errorMessage() }}</p>
+        }
+
+        <button class="btn block" type="submit" [disabled]="isSubmitting()">
+          {{ isSubmitting() ? 'Signing in…' : needsCode() ? 'Verify' : 'Sign in' }}
+        </button>
+        @if (needsCode()) {
+          <button class="link-button" type="button" (click)="startOver()">Use a different account</button>
+        }
+      </form>
+    </div>
+  </section>
 </div>

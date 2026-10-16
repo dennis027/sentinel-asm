@@ -1,74 +1,180 @@
 .login-page {
   min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+}
+
+// ---------------- Left: the pitch (always dark) ----------------
+
+.hero {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: var(--space-6);
+  color: #c9d1e0;
+  background:
+    radial-gradient(700px 500px at 30% 20%, rgba(99, 102, 241, 0.28), transparent 65%),
+    #0b1020;
 }
 
-.login-card {
-  width: 340px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  padding: var(--space-6);
-}
+.hero-inner { width: 100%; max-width: 440px; }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-5);
-  font-weight: 600;
-  color: var(--color-accent);
+  gap: var(--space-3);
+  font-weight: 650;
+  font-size: 15px;
+  color: #fff;
 }
 
-h1 {
-  font-size: 18px;
-  margin: 0 0 4px;
-  font-weight: 600;
+
+.hero-art {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  margin: var(--space-5) auto;
 }
+
+.ring { stroke: rgba(165, 180, 252, 0.22); stroke-width: 1.5; }
+.axis { stroke: rgba(165, 180, 252, 0.12); stroke-width: 1; }
+.link { stroke: rgba(165, 180, 252, 0.3); stroke-width: 1.5; stroke-dasharray: 3 5; }
+.sweep { fill: rgba(99, 102, 241, 0.22); }
+.beam { stroke: #818cf8; stroke-width: 2; stroke-linecap: round; }
+.core { fill: #4f46e5; }
+.core-mark { stroke: #fff; stroke-width: 2; stroke-linejoin: round; }
+
+.node {
+  stroke: #0b1020;
+  stroke-width: 3;
+
+  &.ok { fill: #34d399; }
+  &.warn { fill: #fbbf24; }
+  &.bad { fill: #f87171; }
+}
+
+.pulse {
+  fill: rgba(248, 113, 113, 0.25);
+  transform-origin: 214px 78px;
+  animation: pulse 2.4s ease-out infinite;
+}
+
+@keyframes pulse {
+  from { transform: scale(0.6); opacity: 1; }
+  to { transform: scale(1.5); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse { animation: none; }
+}
+
+.hero h2 {
+  margin: 0 0 var(--space-4);
+  font-size: 22px;
+  line-height: 1.3;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: #fff;
+}
+
+.hero ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.hero li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+
+  app-icon { color: #a5b4fc; }
+}
+
+// ---------------- Right: the form ----------------
+
+.form-side {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+}
+
+// Only needed when the hero (which carries the brand) is hidden.
+.brand.compact {
+  display: none;
+  margin-bottom: var(--space-5);
+  color: var(--color-text-primary);
+}
+
+h1 { font-size: 26px; }
 
 .subtitle {
-  margin: 0 0 var(--space-5);
-  font-size: 13px;
+  margin: 4px 0 var(--space-5);
   color: var(--color-text-secondary);
-}
-
-label {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  display: block;
-  margin-bottom: var(--space-1);
 }
 
 input {
   width: 100%;
+  height: 42px;
   margin-bottom: var(--space-4);
 }
 
-button {
-  width: 100%;
-  height: 38px;
-  background: var(--color-accent);
-  color: #fff;
-  font-weight: 500;
+.btn { height: 42px; }
 
-  &:hover { background: var(--color-accent-hover); }
-  &:disabled { opacity: 0.6; cursor: default; }
-}
-
-.error {
-  font-size: 12px;
-  color: var(--color-danger);
-  margin: calc(var(--space-4) * -1 + 6px) 0 var(--space-4);
-}
+.error { margin: 0 0 var(--space-4); }
 
 .info {
-  font-size: 12px;
-  color: var(--color-accent);
-  background: var(--color-accent-bg);
+  font-size: 13px;
+  color: var(--color-info);
+  background: var(--color-info-bg);
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-3);
   margin: 0 0 var(--space-4);
 }
+
+@media (max-width: 860px) {
+  .login-page { grid-template-columns: 1fr; }
+  .hero { display: none; }
+  .brand.compact { display: flex; }
+}
+
+.back {
+  display: inline-block;
+  margin-bottom: var(--space-5);
+  font-size: 13px;
+}
+
+.theme {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+}
+
+.two-factor {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-accent-bg);
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+}
+
+.link-button {
+  display: block;
+  margin: var(--space-3) auto 0;
+  font-size: 13px;
+  color: var(--color-link);
+}
+
+// The hero panel is dark in both themes.
+.hero .brand-accent { color: #a5b4fc; }

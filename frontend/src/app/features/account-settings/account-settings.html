@@ -1,8 +1,14 @@
-<div class="page">
-  <h1>Account settings</h1>
-  <p class="muted">Change your password. This will sign you out of all other sessions.</p>
+<div class="page narrow">
+  <div class="header">
+    <div>
+      <h1>Account settings</h1>
+      <p class="muted">Your password, two-factor sign-in, API keys and recent sign-ins.</p>
+    </div>
+  </div>
 
   <div class="panel">
+    <h2>Password</h2>
+    <p class="muted">Changing it signs you out of every other session.</p>
     <form (ngSubmit)="submit()">
       <label for="current">Current password</label>
       <input
@@ -38,9 +44,133 @@
         <p class="error">{{ errorMessage() }}</p>
       }
 
-      <button type="submit" [disabled]="isSubmitting()">
+      <button class="btn" type="submit" [disabled]="isSubmitting()">
         {{ isSubmitting() ? 'Changing…' : 'Change password' }}
       </button>
     </form>
   </div>
+
+  <section class="panel">
+    <div class="panel-header">
+      <h2><app-icon name="smartphone" [size]="18" /> Two-factor sign-in</h2>
+      @if (twoFactor()?.enabled) {
+        <span class="badge ok"><app-icon name="check" [size]="12" /> On</span>
+      } @else {
+        <span class="badge pending">Off</span>
+      }
+    </div>
+
+    @if (twoFactor()?.enabled) {
+      <p class="muted">
+        On since {{ twoFactor()?.enabled_at | date: 'mediumDate' }}. Signing in needs your password and a code from
+        your authenticator app.
+      </p>
+      <form class="inline" (ngSubmit)="disableTwoFactor()">
+        <input type="password" name="disable-password" autocomplete="current-password" placeholder="Your password"
+               aria-label="Your password, to turn two-factor sign-in off"
+               [ngModel]="disablePassword()" (ngModelChange)="disablePassword.set($event)" />
+        <button class="btn secondary" type="submit" [disabled]="!disablePassword() || isTwoFactorBusy()">Turn off</button>
+      </form>
+    } @else if (setup(); as s) {
+      <ol class="setup-steps">
+        <li>Open an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…) and scan this code.</li>
+      </ol>
+      <div class="qr-row">
+        <div class="qr" [innerHTML]="qrCode()"></div>
+        <div>
+          <p class="muted">Can't scan it? Enter this key instead:</p>
+          <code class="secret">{{ s.secret }}</code>
+        </div>
+      </div>
+      <ol class="setup-steps" start="2">
+        <li>Enter the 6-digit code the app shows.</li>
+      </ol>
+      <form class="inline" (ngSubmit)="confirmTwoFactor()">
+        <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456"
+               aria-label="Code from the authenticator app" [ngModel]="code()" (ngModelChange)="code.set($event)" />
+        <button class="btn" type="submit" [disabled]="code().trim().length !== 6 || isTwoFactorBusy()">Turn on</button>
+        <button class="btn secondary" type="button" (click)="setup.set(null)">Cancel</button>
+      </form>
+    } @else {
+      <p class="muted">
+        Protects this account even if the password leaks: signing in also needs a code from your phone. Strongly
+        recommended for owners and admins.
+      </p>
+      <button class="btn" (click)="startTwoFactor()" [disabled]="isTwoFactorBusy()">Set up two-factor sign-in</button>
+    }
+    @if (twoFactorError()) {
+      <p class="error" role="alert">{{ twoFactorError() }}</p>
+    }
+  </section>
+
+  <section class="panel">
+    <h2><app-icon name="key" [size]="18" /> API keys</h2>
+    <p class="muted">
+      For scripts and integrations: a SIEM pulling findings, a CI job checking the grade. A key can only
+      <strong>read</strong>, sees what you can see, and can be revoked at any time.
+    </p>
+
+    @if (createdKey(); as k) {
+      <div class="new-key" role="status">
+        <p><strong>Copy "{{ k.name }}" now.</strong> This is the only time it is shown.</p>
+        <div class="key-row">
+          <code>{{ k.key }}</code>
+          <button class="btn secondary small" (click)="copyKey()"><app-icon name="copy" [size]="13" /> Copy</button>
+        </div>
+        <p class="hint">Use it like this:</p>
+        <pre>curl -H "Authorization: Api-Key {{ k.key }}" \
+  {{ apiBase }}/findings/?severity=critical</pre>
+        <button class="btn secondary small" (click)="createdKey.set(null)">Done</button>
+      </div>
+    }
+
+    @if (apiKeys().length) {
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Key</th><th>Created</th><th>Last used</th><th></th></tr>
+        </thead>
+        <tbody>
+          @for (k of apiKeys(); track k.id) {
+            <tr>
+              <td>{{ k.name }}</td>
+              <td><code>{{ k.prefix }}…</code></td>
+              <td class="muted">{{ k.created_at | date: 'mediumDate' }}</td>
+              <td class="muted">{{ k.last_used_at ? (k.last_used_at | date: 'MMM d, h:mm a') : 'Never' }}</td>
+              <td class="right"><button class="btn secondary small" (click)="revokeKey(k)">Revoke</button></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+
+    <form class="inline" (ngSubmit)="createKey()">
+      <input name="key-name" maxlength="100" placeholder="What it's for, e.g. Splunk" aria-label="Name for the new key"
+             [ngModel]="newKeyName()" (ngModelChange)="newKeyName.set($event)" />
+      <button class="btn" type="submit" [disabled]="!newKeyName().trim() || isCreatingKey()">Create key</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2><app-icon name="activity" [size]="18" /> Recent sign-ins</h2>
+    <p class="muted">Sign-ins and failed attempts on your username. Something you don't recognise? Change your password.</p>
+    @if (signIns().length === 0) {
+      <p class="muted">Nothing recorded yet.</p>
+    } @else {
+      <table>
+        <tbody>
+          @for (e of signIns(); track e.id) {
+            <tr>
+              <td>
+                <span class="badge" [class.tone-serious]="e.event_type === 'login_failed'"
+                      [class.ok]="e.event_type === 'login_success'">{{ e.label }}</span>
+              </td>
+              <td>{{ device(e.user_agent) }}</td>
+              <td class="muted">{{ e.ip_address ?? '—' }}</td>
+              <td class="muted right">{{ e.created_at | date: 'MMM d, y, h:mm a' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </section>
 </div>

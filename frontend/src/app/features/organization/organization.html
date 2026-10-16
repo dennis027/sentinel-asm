@@ -1,0 +1,318 @@
+<div class="page narrow">
+  @if (hasNoOrganizations()) {
+    <h1>Welcome to Densight</h1>
+    <p class="muted lead">
+      Start by adding the domain you want to monitor. You will be asked to prove you control it
+      before anything is scanned.
+    </p>
+  } @else {
+    <div class="header">
+      <div>
+        <h1>Organization</h1>
+        <p class="muted">Domain, verification and team for {{ org()?.name }}.</p>
+      </div>
+      @if (!isCreating()) {
+        <button class="btn" (click)="startCreating()"><app-icon name="plus" [size]="14" /> New organization</button>
+      }
+    </div>
+  }
+
+  @if (isCreating() || hasNoOrganizations()) {
+    <form class="panel" (ngSubmit)="submitCreate()">
+      <h2>{{ hasNoOrganizations() ? 'Add your organization' : 'New organization' }}</h2>
+      <label for="org-name">Name</label>
+      <input
+        id="org-name"
+        name="name"
+        placeholder="Acme Inc"
+        [ngModel]="newName()"
+        (ngModelChange)="newName.set($event)"
+      />
+      <label for="org-domain">Root domain</label>
+      <input
+        id="org-domain"
+        name="domain"
+        placeholder="example.com"
+        autocapitalize="off"
+        spellcheck="false"
+        aria-describedby="org-domain-hint"
+        [ngModel]="newDomain()"
+        (ngModelChange)="newDomain.set($event)"
+      />
+      <p id="org-domain-hint" class="hint">
+        Just the domain, without https:// or a path. It can't be changed later.
+      </p>
+      @if (createError()) {
+        <p class="error" role="alert">{{ createError() }}</p>
+      }
+      <div class="form-actions">
+        <button class="btn" type="submit" [disabled]="isSubmittingCreate()">
+          {{ isSubmittingCreate() ? 'Creating…' : 'Create organization' }}
+        </button>
+        @if (!hasNoOrganizations()) {
+          <button type="button" class="btn secondary" (click)="cancelCreating()">Cancel</button>
+        }
+      </div>
+    </form>
+  }
+
+  @if (org(); as org) {
+    <section class="panel">
+      <h2>Details</h2>
+      <dl class="facts">
+        <dt>Name</dt>
+        <dd>{{ org.name }}</dd>
+        <dt>Root domain</dt>
+        <dd>{{ org.root_domain }}</dd>
+        <dt>Your role</dt>
+        <dd>{{ roleLabel(org.my_role) }}</dd>
+      </dl>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Domain verification</h2>
+        @if (org.domain_verified) {
+          <span class="badge ok"><app-icon name="check" [size]="12" /> Verified</span>
+        } @else if (org.verification_required) {
+          <span class="badge pending">Not verified</span>
+        } @else {
+          <span class="badge">Not required</span>
+        }
+      </div>
+
+      @if (org.domain_verified) {
+        <p class="muted">
+          Ownership of {{ org.root_domain }} was confirmed on
+          {{ org.domain_verified_at | date: 'mediumDate' }}.
+        </p>
+      } @else if (!org.verification_required) {
+        <p class="muted">This server does not require domain verification before scanning.</p>
+      } @else {
+        <p>
+          Scans are switched off until you show that you control <strong>{{ org.root_domain }}</strong>.
+        </p>
+        <ol class="steps">
+          <li>
+            Open the DNS settings for {{ org.root_domain }} at your DNS provider and add a
+            <strong>TXT</strong> record:
+            <div class="record">
+              <span class="record-label">Name</span>
+              <code>{{ org.verification_record_name }}</code>
+              <button class="btn secondary small" (click)="copy('name', org.verification_record_name)">
+                <app-icon [name]="copied() === 'name' ? 'check' : 'copy'" [size]="13" />
+                {{ copied() === 'name' ? 'Copied' : 'Copy' }}
+              </button>
+              <span class="record-label">Value</span>
+              <code>{{ org.verification_record_value }}</code>
+              <button class="btn secondary small" (click)="copy('value', org.verification_record_value)">
+                <app-icon [name]="copied() === 'value' ? 'check' : 'copy'" [size]="13" />
+                {{ copied() === 'value' ? 'Copied' : 'Copy' }}
+              </button>
+            </div>
+          </li>
+          <li>Wait a few minutes for the record to become visible.</li>
+          <li>
+            @if (orgContext.canManageSettings()) {
+              <button class="btn" [disabled]="isVerifying()" (click)="verifyDomain()">
+                {{ isVerifying() ? 'Checking DNS…' : 'Check record' }}
+              </button>
+            } @else {
+              Ask an admin of this organization to check the record.
+            }
+          </li>
+        </ol>
+        @if (verifyError()) {
+          <p class="error" role="alert">{{ verifyError() }}</p>
+        }
+      }
+    </section>
+
+    <section class="panel">
+      <h2>Fix-by deadlines</h2>
+      <p class="muted">
+        How many days the team has to fix an issue once it is found. Overdue counts, the dashboard and the weekly
+        report all follow this policy.
+      </p>
+      <form class="sla" (ngSubmit)="saveSla()">
+        @for (severity of slaSeverities; track severity) {
+          <label class="sla-item">
+            <span class="badge severity-{{ severity }}">{{ severity }}</span>
+            <input
+              type="number"
+              min="1"
+              max="365"
+              [name]="'sla-' + severity"
+              [disabled]="!orgContext.canManageSettings()"
+              [ngModel]="slaDraft()[severity]"
+              (ngModelChange)="setSla(severity, $event)"
+              [attr.aria-label]="'Days to fix ' + severity + ' issues'"
+            />
+            <span class="muted">days</span>
+          </label>
+        }
+        @if (orgContext.canManageSettings()) {
+          <button class="btn" type="submit" [disabled]="isSavingPolicy() === 'sla'">
+            {{ isSavingPolicy() === 'sla' ? 'Saving…' : 'Save' }}
+          </button>
+        }
+      </form>
+      @if (policyError()?.section === 'sla') {
+        <p class="error" role="alert">{{ policyError()?.message }}</p>
+      }
+    </section>
+
+    <section class="panel">
+      <h2>Never scan</h2>
+      <p class="muted">
+        Hosts under {{ org.root_domain }} that someone else runs (a hosted shop, a status page, an agency's site)
+        and you are not allowed to test. They stay in the inventory but no scanner touches them.
+      </p>
+      <form (ngSubmit)="saveScope()">
+        <textarea
+          name="scope"
+          rows="4"
+          spellcheck="false"
+          aria-label="Hosts never to scan, one per line"
+          [placeholder]="'support.' + org.root_domain + '\n*.agency.' + org.root_domain"
+          [disabled]="!orgContext.canManageSettings()"
+          [ngModel]="scopeDraft()"
+          (ngModelChange)="scopeDraft.set($event)"
+        ></textarea>
+        <p class="hint">One per line. <code>*.name</code> covers everything under that name.</p>
+        @if (orgContext.canManageSettings()) {
+          <button class="btn" type="submit" [disabled]="isSavingPolicy() === 'scope'">
+            {{ isSavingPolicy() === 'scope' ? 'Saving…' : 'Save' }}
+          </button>
+        }
+      </form>
+      @if (policyError()?.section === 'scope') {
+        <p class="error" role="alert">{{ policyError()?.message }}</p>
+      }
+    </section>
+
+    <section class="panel">
+      <h2>Members</h2>
+      @if (membersError()) {
+        <p class="error" role="alert">{{ membersError() }}</p>
+      }
+      <table>
+        <thead>
+          <tr>
+            <th>Person</th>
+            <th>Role</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (member of members(); track member.id) {
+            <tr>
+              <td>
+                {{ member.username }}
+                @if (isSelf(member)) {
+                  <span class="muted">(you)</span>
+                }
+                @if (member.email) {
+                  <span class="muted email">{{ member.email }}</span>
+                }
+              </td>
+              <td>
+                @if (canEdit(member)) {
+                  <select
+                    [attr.aria-label]="'Role for ' + member.username"
+                    [ngModel]="member.role"
+                    (ngModelChange)="changeRole(member, $event)"
+                  >
+                    @for (role of assignableRoles(); track role.value) {
+                      <option [value]="role.value">{{ role.label }}</option>
+                    }
+                  </select>
+                } @else {
+                  {{ roleLabel(member.role) }}
+                }
+              </td>
+              <td class="row-action">
+                @if (isSelf(member)) {
+                  <button class="btn secondary small" (click)="removeMember(member)">Leave</button>
+                } @else if (canEdit(member)) {
+                  <button class="btn secondary small" (click)="removeMember(member)">Remove</button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (orgContext.canManageSettings()) {
+        <form class="add-member" (ngSubmit)="addMember()">
+          <input
+            name="identifier"
+            placeholder="Username or email"
+            aria-label="Username or email of the person to add"
+            autocapitalize="off"
+            [ngModel]="newMemberIdentifier()"
+            (ngModelChange)="newMemberIdentifier.set($event)"
+          />
+          <select
+            name="role"
+            aria-label="Role for the new member"
+            [ngModel]="newMemberRole()"
+            (ngModelChange)="newMemberRole.set($event)"
+          >
+            @for (role of assignableRoles(); track role.value) {
+              <option [value]="role.value">{{ role.label }}</option>
+            }
+          </select>
+          <button class="btn" type="submit" [disabled]="isAddingMember() || !newMemberIdentifier().trim()">
+            Add member
+          </button>
+        </form>
+        <p class="hint">The person needs an account on this server first.</p>
+      }
+
+      <details class="role-help">
+        <summary>What can each role do?</summary>
+        <dl class="facts">
+          @for (role of roles; track role.value) {
+            <dt>{{ role.label }}</dt>
+            <dd>{{ role.can }}</dd>
+          }
+        </dl>
+      </details>
+    </section>
+
+    @if (isOwner()) {
+      <section class="panel danger">
+        <h2>Delete this organization</h2>
+        <p>
+          This permanently removes <strong>{{ org.name }}</strong> and everything under it: every
+          asset, finding, screenshot, scan record and notification rule, and everyone's access to
+          it. Scans still waiting to run are dropped. It cannot be undone.
+        </p>
+        <label for="delete-confirm">Type <strong>{{ org.root_domain }}</strong> to confirm</label>
+        <div class="delete-row">
+          <input
+            id="delete-confirm"
+            name="delete-confirm"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            [placeholder]="org.root_domain"
+            [ngModel]="deleteConfirmation()"
+            (ngModelChange)="deleteConfirmation.set($event)"
+          />
+          <button
+            class="btn danger"
+            [disabled]="!canDelete() || isDeleting()"
+            (click)="deleteOrganization()"
+          >
+            {{ isDeleting() ? 'Deleting…' : 'Delete organization' }}
+          </button>
+        </div>
+        @if (deleteError()) {
+          <p class="error" role="alert">{{ deleteError() }}</p>
+        }
+      </section>
+    }
+  }
+</div>
