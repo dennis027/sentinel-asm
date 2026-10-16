@@ -1,0 +1,48 @@
+.grid { display: flex; flex-direction: column; gap: 4px; }
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(130px, 1.3fr) repeat(4, minmax(44px, 1fr));
+  gap: 4px;
+  align-items: center;
+}
+
+.col-head {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  text-transform: capitalize;
+  color: var(--color-text-secondary);
+}
+
+.label {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell {
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+  transition: transform 0.1s ease;
+
+  &:hover:not(.blank) { transform: scale(1.06); }
+  &.blank { background: var(--color-surface-alt); }
+}
+
+// Each severity in its own colour, deeper as the count grows.
+@each $sev, $color in (critical: --color-danger, high: --color-serious, medium: --color-warning, low: --color-info) {
+  .sev-#{$sev} {
+    color: var(#{$color});
+    background: color-mix(in srgb, var(#{$color}) 14%, transparent);
+    &.level-2 { background: color-mix(in srgb, var(#{$color}) 28%, transparent); }
+    &.level-3 { background: color-mix(in srgb, var(#{$color}) 45%, transparent); }
+    &.level-4 { background: var(#{$color}); color: var(--color-surface); }
+  }
+}

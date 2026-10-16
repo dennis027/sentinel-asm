@@ -1,0 +1,98 @@
+<div class="board">
+  <header>
+    <div class="brand">
+      <app-logo-mark class="brand-mark" [size]="44" />
+      <div>
+        <p class="org">{{ orgContext.selectedOrganization()?.name }}</p>
+        <p class="domain">{{ orgContext.selectedOrganization()?.root_domain }} · attack surface</p>
+      </div>
+    </div>
+    <div class="right">
+      <span class="clock">{{ now() | date: 'EEE d MMM, HH:mm' }}</span>
+      @if (updatedAt(); as at) {
+        <span class="live"><span class="dot"></span> Live · updated {{ at | date: 'HH:mm' }}</span>
+      }
+      <button class="ghost" (click)="toggleFullscreen()" [attr.aria-label]="isFullscreen() ? 'Leave full screen' : 'Full screen'">
+        <app-icon name="monitor" [size]="16" /> {{ isFullscreen() ? 'Exit full screen' : 'Full screen' }}
+      </button>
+      <a class="ghost" routerLink="/dashboard"><app-icon name="x" [size]="16" /> Close</a>
+    </div>
+  </header>
+
+  @if (summary(); as s) {
+    <section class="hero">
+      <div class="gauge {{ gradeClass() }}">
+        <svg viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="track" cx="100" cy="100" r="88" />
+          <circle class="value" cx="100" cy="100" r="88"
+                  [attr.stroke-dasharray]="ringLength" [attr.stroke-dashoffset]="ringOffset()" />
+        </svg>
+        <div class="gauge-text">
+          <span class="letter">{{ s.average_risk_grade ?? '–' }}</span>
+          <span class="score">{{ s.average_risk_score ?? '–' }} / 100</span>
+        </div>
+      </div>
+      <div class="story">
+        <p class="kicker">In short</p>
+        <p class="narrative">{{ s.narrative.join(' ') }}</p>
+      </div>
+    </section>
+
+    <section class="tiles">
+      <div class="tile" [class.bad]="urgent() > 0">
+        <span class="n">{{ urgent() | number }}</span>
+        <span class="l">Critical or high open</span>
+      </div>
+      <div class="tile" [class.bad]="s.remediation.overdue > 0">
+        <span class="n">{{ s.remediation.overdue | number }}</span>
+        <span class="l">Past their fix-by date</span>
+      </div>
+      <div class="tile good">
+        <span class="n">{{ s.remediation.fixed_last_90_days | number }}</span>
+        <span class="l">Fixed in 90 days</span>
+      </div>
+      <div class="tile">
+        <span class="n">{{ s.asset_count | number }}</span>
+        <span class="l">Hosts watched</span>
+      </div>
+      @if (changes(); as c) {
+        <div class="tile">
+          <span class="n">+{{ c.new_issues.count | number }}</span>
+          <span class="l">New issues this week</span>
+        </div>
+      }
+    </section>
+
+    <section class="lower">
+      <div class="card">
+        <p class="kicker">Risk score, 90 days</p>
+        <app-trend-chart [points]="trend()" />
+        <app-grade-calendar [points]="trend()" />
+      </div>
+      <div class="card">
+        <p class="kicker">Next three fixes</p>
+        @if (nextFixes().length === 0) {
+          <p class="clear"><app-icon name="check" [size]="20" /> Nothing open needs action.</p>
+        } @else {
+          <ol class="fixes">
+            @for (step of nextFixes(); track $index; let i = $index) {
+              <li>
+                <span class="num">{{ i + 1 }}</span>
+                <div>
+                  <p class="what">{{ step.action }}</p>
+                  <p class="meta">
+                    <span class="badge severity-{{ step.severity }}">{{ step.severity }}</span>
+                    {{ step.issues }} issue{{ step.issues === 1 ? '' : 's' }} on {{ step.hosts }} host{{ step.hosts === 1 ? '' : 's' }}
+                  </p>
+                </div>
+                <span class="then">then <strong>{{ step.grade_after }}</strong></span>
+              </li>
+            }
+          </ol>
+        }
+      </div>
+    </section>
+  } @else {
+    <p class="waiting">Loading…</p>
+  }
+</div>

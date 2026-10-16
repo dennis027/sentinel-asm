@@ -1,0 +1,41 @@
+:host { display: block; }
+
+.calendar {
+  display: flex;
+  gap: 3px;
+  overflow-x: auto;
+}
+
+.week {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.day {
+  display: block;
+  width: var(--calendar-day, 13px);
+  height: var(--calendar-day, 13px);
+  border-radius: 3px;
+  background: var(--color-surface-alt);
+}
+
+// A ramp from green to red, one clearly different step per grade.
+.g-Aplus { background: var(--color-success); }
+.g-A { background: color-mix(in srgb, var(--color-success) 60%, var(--color-surface)); }
+.g-B { background: color-mix(in srgb, var(--color-success) 45%, var(--color-warning)); }
+.g-C { background: var(--color-warning); }
+.g-D { background: var(--color-serious); }
+.g-F { background: var(--color-danger); }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+
+  .item { display: inline-flex; align-items: center; gap: 4px; }
+  .day { width: 10px; height: 10px; }
+}

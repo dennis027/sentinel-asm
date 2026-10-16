@@ -1,0 +1,17 @@
+<div class="calendar" role="img" [attr.aria-label]="'Daily grade over the last ' + days() + ' days'">
+  @for (week of weeks(); track $index) {
+    <div class="week">
+      @for (day of week; track day.date) {
+        <span
+          class="day {{ gradeClass(day.grade) }}"
+          [title]="(day.date | date: 'EEE, MMM d') + ': ' + (day.grade ? 'grade ' + day.grade + ' (' + day.score + ')' : 'no record')"
+        ></span>
+      }
+    </div>
+  }
+</div>
+<div class="legend">
+  @for (grade of legend; track grade) {
+    <span class="item"><span class="day {{ gradeClass(grade) }}"></span>{{ grade }}</span>
+  }
+</div>

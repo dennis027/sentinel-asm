@@ -1,0 +1,42 @@
+@if (scored().length >= 2) {
+  <div class="chart">
+    <svg
+      [attr.viewBox]="'0 0 ' + width + ' ' + height"
+      preserveAspectRatio="none"
+      role="img"
+      [attr.aria-label]="'Risk score from ' + scored()[0].score + ' to ' + scored()[scored().length - 1].score + ' out of 100'"
+      (mousemove)="onMove($event)"
+      (mouseleave)="hoverIndex.set(null)"
+    >
+      @for (line of gradeLines; track line.score) {
+        <line class="guide" [attr.x1]="pad.left" [attr.x2]="width - pad.right" [attr.y1]="y(line.score)" [attr.y2]="y(line.score)" />
+        <text class="guide-label" [attr.x]="pad.left - 8" [attr.y]="y(line.score) + 4" text-anchor="end">{{ line.label }}</text>
+      }
+      <line class="axis" [attr.x1]="pad.left" [attr.x2]="width - pad.right" [attr.y1]="y(0)" [attr.y2]="y(0)" />
+
+      <path class="area" [attr.d]="areaPath()" />
+      <path class="line" [attr.d]="linePath()" />
+
+      @for (tick of ticks(); track tick.x) {
+        <text class="tick" [attr.x]="tick.x" [attr.y]="height - 6" [attr.text-anchor]="tick.anchor">
+          {{ tick.date | date: 'MMM d' }}
+        </text>
+      }
+
+      @if (hovered(); as hover) {
+        <line class="crosshair" [attr.x1]="hover.x" [attr.x2]="hover.x" [attr.y1]="pad.top" [attr.y2]="y(0)" />
+        <circle class="dot" [attr.cx]="hover.x" [attr.cy]="hover.y" r="4.5" />
+      }
+    </svg>
+
+    @if (hovered(); as hover) {
+      <div class="tooltip" [style.left.%]="tooltipLeft()">
+        <strong>{{ hover.point.date | date: 'EEE, MMM d' }}</strong>
+        <span>Score {{ hover.point.score }} · grade {{ hover.point.grade }}</span>
+        <span>{{ hover.point.open_issues }} open issues, {{ hover.point.critical_high }} critical or high</span>
+      </div>
+    }
+  </div>
+} @else {
+  <p class="muted empty">The trend fills in as the numbers are recorded each day.</p>
+}

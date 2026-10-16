@@ -1,0 +1,30 @@
+@if (heatmap().rows.length === 0) {
+  <p class="muted">No open issues.</p>
+} @else {
+  <div class="grid" role="table" aria-label="Open issues by kind and severity">
+    <div class="row head" role="row">
+      <span role="columnheader"></span>
+      @for (severity of heatmap().severities; track severity) {
+        <span class="col-head" role="columnheader">{{ severity }}</span>
+      }
+    </div>
+    @for (row of heatmap().rows; track row.finding_type) {
+      <div class="row" role="row">
+        <span class="label" role="rowheader" [title]="typeLabel(row.finding_type)">{{ typeLabel(row.finding_type) }}</span>
+        @for (severity of heatmap().severities; track severity) {
+          @if (row.counts[severity]; as count) {
+            <a
+              role="cell"
+              class="cell sev-{{ severity }} level-{{ level(count) }}"
+              routerLink="/findings"
+              [queryParams]="{ type: row.finding_type, severity: severity }"
+              [title]="count + ' ' + severity + ': ' + typeLabel(row.finding_type)"
+            >{{ count }}</a>
+          } @else {
+            <span role="cell" class="cell blank"></span>
+          }
+        }
+      </div>
+    }
+  </div>
+}

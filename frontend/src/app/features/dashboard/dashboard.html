@@ -1,68 +1,274 @@
 <div class="page">
   @if (isLoading()) {
-    <p class="muted">Loading…</p>
+    <p class="loading">Loading…</p>
   } @else if (errorMessage()) {
-    <p class="error">{{ errorMessage() }}</p>
+    <p class="error" role="alert">{{ errorMessage() }}</p>
   } @else {
     <div class="header">
       <div>
         <h1>Dashboard</h1>
-       html
-      <p class="muted">{{ orgContext.selectedOrganization()?.name }}</p>
+        <p class="muted">
+          Everything {{ orgContext.selectedOrganization()?.name }} exposes to the internet under
+          {{ orgContext.selectedOrganization()?.root_domain }}, and what needs fixing.
+        </p>
+      </div>
+      <div class="header-actions">
+        <a class="btn secondary" routerLink="/board" title="Full-screen view for a meeting room or a wall screen">
+          <app-icon name="monitor" [size]="14" /> Board view
+        </a>
+        <button class="btn secondary" [disabled]="isBuildingReport()" (click)="downloadReport()">
+          <app-icon name="download" [size]="14" />
+          {{ isBuildingReport() ? 'Building…' : 'Download report' }}
+        </button>
+        @if (orgContext.canTriggerScans()) {
+          <a class="btn" routerLink="/scanners"><app-icon name="play" [size]="14" /> Run a scan</a>
+        }
       </div>
     </div>
 
-    <div class="metrics">
-      <div class="metric-card">
+    @if (nextSteps().length > 0) {
+      <div class="panel next-steps">
+        <p class="panel-title">Getting started</p>
+        <ol>
+          @for (step of nextSteps(); track step.link) {
+            <li>
+              <span>{{ step.text }}</span>
+              <a class="btn secondary small" [routerLink]="step.link">{{ step.action }}</a>
+            </li>
+          }
+        </ol>
+      </div>
+    }
+
+    @if (riskSummary()?.narrative?.length) {
+      <div class="panel in-short">
+        <span class="in-short-mark"><app-icon name="shield-check" [size]="20" /></span>
+        <div>
+          <p class="panel-title">In short</p>
+          <p class="in-short-text">{{ riskSummary()?.narrative?.join(' ') }}</p>
+        </div>
+      </div>
+    }
+
+    <div class="overview">
+      <div class="panel grade-card">
         <p class="metric-label">Risk grade</p>
-        <p class="metric-value grade-{{ riskSummary()?.average_risk_grade }}">
-          {{ riskSummary()?.average_risk_grade ?? '—' }}
+        <div class="grade-row">
+          <span class="grade grade-{{ riskSummary()?.average_risk_grade }}">
+            {{ riskSummary()?.average_risk_grade ?? '—' }}
+          </span>
+          <div>
+            <p class="grade-meaning">{{ gradeMeaning() }}</p>
+            @if (riskSummary()?.average_risk_score !== null) {
+              <p class="muted">Score {{ riskSummary()?.average_risk_score }} out of 100</p>
+            }
+          </div>
+        </div>
+        <div
+          class="meter"
+          role="img"
+          [attr.aria-label]="'Average risk score ' + (riskSummary()?.average_risk_score ?? 0) + ' out of 100'"
+        >
+          <span
+            class="meter-fill grade-{{ riskSummary()?.average_risk_grade }}"
+            [style.width.%]="riskSummary()?.average_risk_score ?? 0"
+          ></span>
+        </div>
+        <p class="hint">
+          @if (riskSummary()?.assets_at_risk) {
+            Average of the {{ riskSummary()?.assets_at_risk | plural: 'asset' }} with open issues.
+            Assets with none don't pull the grade up.
+          } @else {
+            A+ is best, F is worst. No asset has an open issue.
+          }
         </p>
+        @if (riskSummary()?.assets_at_risk) {
+          <a class="fix-link" routerLink="/fix-plan">
+            What to fix first, and what it does for the grade <app-icon name="chevron-right" [size]="14" />
+          </a>
+        }
       </div>
-      <div class="metric-card">
-        <p class="metric-label">Assets</p>
-        <p class="metric-value">{{ assetCount() }}</p>
-      </div>
-      <div class="metric-card">
-        <p class="metric-label">Active findings</p>
-        <p class="metric-value">
-          {{ activeFindingsTotal() }}
-        </p>
-      </div>
-      <div class="metric-card">
-        <p class="metric-label">Critical</p>
-        <p class="metric-value critical">
-          {{ riskSummary()?.active_findings_by_severity?.critical ?? 0 }}
-        </p>
+
+      <div class="metrics">
+        <a class="panel metric-card" routerLink="/assets">
+          <p class="metric-label"><app-icon name="assets" [size]="16" /> Assets</p>
+          <p class="metric-value">{{ assetCount() | number }}</p>
+          <div class="metric-detail">
+            <span class="dot-label"><span class="dot bad"></span>{{ riskSummary()?.assets_at_risk ?? 0 | number }} with open issues</span>
+            <span class="dot-label"><span class="dot good"></span>{{ cleanAssets() | number }} clean</span>
+          </div>
+          <p class="hint">Hosts being monitored</p>
+        </a>
+        <a class="panel metric-card" routerLink="/findings">
+          <p class="metric-label"><app-icon name="findings" [size]="16" /> Open issues</p>
+          <p class="metric-value">{{ activeFindingsTotal() | number }}</p>
+          <div class="metric-detail">
+            @for (row of severityRows(); track row.severity) {
+              @if (row.count) {
+                <span class="dot-label"><span class="dot sev-{{ row.severity }}"></span>{{ row.count }} {{ row.severity }}</span>
+              }
+            }
+          </div>
+          <p class="hint">Not yet resolved or triaged</p>
+        </a>
+        <a class="panel metric-card" routerLink="/fix-plan">
+          <p class="metric-label"><app-icon name="bug" [size]="16" /> Critical or high</p>
+          <p class="metric-value" [class.bad]="urgentCount() > 0">{{ urgentCount() | number }}</p>
+          <div class="metric-detail">
+            @if (riskSummary()?.remediation; as fix) {
+              <span class="dot-label"><span class="dot bad"></span>{{ fix.unassigned_critical_high | number }} with nobody assigned</span>
+            }
+          </div>
+          <p class="hint">Fix these first: see the fix plan</p>
+        </a>
       </div>
     </div>
 
-    <div class="panel">
-      <p class="panel-title">Recent findings</p>
-      @if (recentFindings().length === 0) {
-        <p class="muted">No active findings.</p>
-      } @else {
-        <table>
-          <thead>
-            <tr>
-              <th>Severity</th>
-              <th>Title</th>
-              <th>Asset</th>
-              <th>Last seen</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (finding of recentFindings(); track finding.id) {
-              <tr>
-                <td><span class="badge severity-{{ finding.severity }}">{{ finding.severity | uppercase }}</span></td>
-                <td>{{ finding.title }}</td>
-                <td class="muted">{{ finding.asset_value }}</td>
-                <td class="muted">{{ finding.last_seen | date: 'short' }}</td>
-              </tr>
-            }
-          </tbody>
-        </table>
+    <div class="middle">
+      <div class="panel">
+        <div class="panel-heading">
+          <p class="panel-title">Risk score, last 90 days</p>
+          @if (trendDelta(); as trendChange) {
+            <span class="delta" [class.up]="trendChange.delta > 0" [class.down]="trendChange.delta < 0">
+              {{ trendChange.delta > 0 ? '▲' : trendChange.delta < 0 ? '▼' : '' }}
+              {{ trendChange.delta > 0 ? '+' : '' }}{{ trendChange.delta }} points
+            </span>
+          }
+        </div>
+        <app-trend-chart [points]="trend()" />
+        @if (trend().length) {
+          <p class="calendar-title">Grade, day by day</p>
+          <app-grade-calendar [points]="trend()" />
+        }
+      </div>
+
+      @if (riskSummary()?.remediation; as fix) {
+        <div class="panel remediation">
+          <p class="panel-title">Remediation</p>
+          <a class="kpi" routerLink="/findings" [queryParams]="{ overdue: 1 }">
+            <span class="kpi-value" [class.bad]="fix.overdue > 0">{{ fix.overdue | number }}</span>
+            <span class="kpi-label">Past their fix-by date</span>
+          </a>
+          <a class="kpi" routerLink="/findings" [queryParams]="{ assignee: 'none' }">
+            <span class="kpi-value" [class.bad]="fix.unassigned_critical_high > 0">{{ fix.unassigned_critical_high | number }}</span>
+            <span class="kpi-label">Critical or high with nobody assigned</span>
+          </a>
+          <div class="kpi">
+            <span class="kpi-value">{{ fix.mean_days_to_fix === null ? '—' : (fix.mean_days_to_fix + ' d') }}</span>
+            <span class="kpi-label">Average time to fix (90 days)</span>
+          </div>
+          <div class="kpi">
+            <span class="kpi-value good">{{ fix.fixed_last_90_days | number }}</span>
+            <span class="kpi-label">Issues fixed in 90 days</span>
+          </div>
+        </div>
       }
     </div>
+
+    @if (changes(); as changed) {
+      <div class="panel changes">
+        <p class="panel-title">What changed in the last {{ changed.days }} days</p>
+        <div class="change-grid">
+          <div class="change">
+            <p class="change-count">{{ changed.new_assets.count | number }}</p>
+            <p class="change-label">New assets</p>
+            <ul>
+              @for (asset of changed.new_assets.items; track asset.id) {
+                <li>
+                  <a routerLink="/findings" [queryParams]="{ asset: asset.id, assetName: asset.value }">{{ asset.value }}</a>
+                </li>
+              }
+            </ul>
+          </div>
+          <div class="change">
+            <p class="change-count">{{ changed.new_issues.count | number }}</p>
+            <p class="change-label">New issues</p>
+            <ul>
+              @for (issue of changed.new_issues.items; track issue.id) {
+                <li>
+                  <span class="badge severity-{{ issue.severity }}">{{ issue.severity }}</span>
+                  <span class="change-title" [title]="issue.title + ' · ' + issue.asset_value">{{ issue.title }}</span>
+                </li>
+              }
+            </ul>
+          </div>
+          <div class="change">
+            <p class="change-count">{{ changed.resolved_issues.count | number }}</p>
+            <p class="change-label">Issues resolved</p>
+            <ul>
+              @for (issue of changed.resolved_issues.items; track issue.id) {
+                <li>
+                  <app-icon class="done" name="check" [size]="14" />
+                  <span class="change-title" [title]="issue.title + ' · ' + issue.asset_value">{{ issue.title }}</span>
+                </li>
+              }
+            </ul>
+          </div>
+        </div>
+      </div>
+    }
+
+    <div class="risk-row">
+      <div class="panel">
+        <div class="panel-heading">
+          <p class="panel-title">Where the risk is</p>
+          <span class="hint">Click a square to see those issues</span>
+        </div>
+        @if (heatmap(); as map) {
+          <app-risk-heatmap [heatmap]="map" />
+        }
+      </div>
+
+      <div class="panel">
+        <div class="panel-heading">
+          <p class="panel-title">Hosts needing attention</p>
+          <a routerLink="/assets">All hosts</a>
+        </div>
+        @if (riskSummary()?.worst_assets?.length) {
+          <ul class="worst">
+            @for (asset of riskSummary()?.worst_assets; track asset.id) {
+              <li>
+                <span class="badge grade-{{ asset.risk_grade }}">{{ asset.risk_grade }}</span>
+                <a [routerLink]="['/assets', asset.id]" [title]="asset.value">{{ asset.value }}</a>
+                <span class="muted">{{ asset.open_findings | plural: 'issue' }}</span>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="muted">No host has open issues.</p>
+        }
+      </div>
+    </div>
+
+      <div class="panel">
+        <div class="panel-heading">
+          <p class="panel-title">Most severe open issues</p>
+          <a routerLink="/findings">See all</a>
+        </div>
+        @if (recentFindings().length === 0) {
+          <p class="muted">No open issues.</p>
+        } @else {
+          <table>
+            <thead>
+              <tr>
+                <th>Severity</th>
+                <th>Finding</th>
+                <th>Asset</th>
+                <th>Last seen</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (finding of recentFindings(); track finding.id) {
+                <tr>
+                  <td><span class="badge severity-{{ finding.severity }}">{{ finding.severity }}</span></td>
+                  <td><a [routerLink]="['/findings', finding.id]">{{ finding.title }}</a></td>
+                  <td><a class="muted-link" [routerLink]="['/assets', finding.asset]">{{ finding.asset_value }}</a></td>
+                  <td class="muted">{{ finding.last_seen | date: 'MMM d, h:mm a' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
   }
 </div>
