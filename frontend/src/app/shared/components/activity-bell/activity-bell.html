@@ -1,0 +1,41 @@
+<button
+  class="bell"
+  (click)="toggle()"
+  [attr.aria-expanded]="isOpen()"
+  [attr.aria-label]="unread() ? unread() + ' new in activity' : 'Activity'"
+  title="What's new"
+>
+  <app-icon name="bell" [size]="18" />
+  @if (unread()) {
+    <span class="count">{{ unread() > 9 ? '9+' : unread() }}</span>
+  }
+</button>
+
+@if (isOpen()) {
+  <div class="panel-pop" role="dialog" aria-label="Recent activity">
+    <div class="pop-head">
+      <strong>What's new</strong>
+      <a routerLink="/activity" (click)="toggle()">See all</a>
+    </div>
+    @if (events().length === 0) {
+      <p class="empty-note">Nothing has happened here yet.</p>
+    } @else {
+      <ul>
+        @for (event of events(); track event.id) {
+          <li [class.new]="isNew(event)">
+            <span class="ico"><app-icon [name]="icon(event)" [size]="14" /></span>
+            <div>
+              <p class="text">
+                @if (isForMe(event)) {
+                  <span class="for-you">For you</span>
+                }
+                {{ event.summary }}
+              </p>
+              <p class="when">{{ event.actor || 'System' }} · {{ event.created_at | date: 'MMM d, h:mm a' }}</p>
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  </div>
+}

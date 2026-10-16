@@ -1,0 +1,20 @@
+@if (isHelpOpen()) {
+  <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->
+  <div class="backdrop" (click)="isHelpOpen.set(false)">
+    <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events -->
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" (click)="$event.stopPropagation()">
+      <h2>Keyboard shortcuts</h2>
+      <dl>
+        <dt><kbd>/</kbd> or <kbd>Ctrl</kbd> <kbd>K</kbd></dt>
+        <dd>Search pages, hosts and issues</dd>
+        @for (jump of jumps; track jump.key) {
+          <dt><kbd>g</kbd> <kbd>{{ jump.key }}</kbd></dt>
+          <dd>{{ jump.label }}</dd>
+        }
+        <dt><kbd>?</kbd></dt>
+        <dd>Show or hide this list</dd>
+      </dl>
+      <button class="btn secondary small" (click)="isHelpOpen.set(false)">Close</button>
+    </div>
+  </div>
+}

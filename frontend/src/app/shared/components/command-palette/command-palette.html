@@ -1,0 +1,59 @@
+@if (search.isOpen()) {
+  <!-- Clicking the dimmed area closes it; Escape does too. -->
+  <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->
+  <div class="backdrop" (click)="search.close()">
+    <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events -->
+    <div class="palette" role="dialog" aria-modal="true" aria-label="Search" (click)="$event.stopPropagation()">
+      <div class="search-row">
+        <app-icon name="search" [size]="18" />
+        <input
+          #input
+          type="text"
+          placeholder="Search pages, hosts and issues…"
+          aria-label="Search pages, hosts and issues"
+          autocomplete="off"
+          spellcheck="false"
+          [value]="query()"
+          (input)="onInput($any($event.target).value)"
+          (keydown)="onKey($event)"
+        />
+        <kbd>Esc</kbd>
+      </div>
+
+      <div class="results" role="listbox">
+        @for (group of ['Pages', 'Assets', 'Issues']; track group) {
+          @if (group === 'Pages' ? pageResults().length : group === 'Assets' ? assetResults().length : issueResults().length) {
+            <p class="group">{{ group }}</p>
+          }
+          @for (result of results(); track $index) {
+            @if (result.group === group) {
+              <button
+                class="result"
+                role="option"
+                [attr.aria-selected]="indexOf(result) === active()"
+                [class.active]="indexOf(result) === active()"
+                (mouseenter)="active.set(indexOf(result))"
+                (click)="choose(result)"
+              >
+                <app-icon [name]="result.icon" [size]="16" />
+                <span class="label">{{ result.label }}</span>
+                @if (result.severity) {
+                  <span class="badge severity-{{ result.severity }}">{{ result.severity }}</span>
+                }
+                <span class="detail">{{ result.detail }}</span>
+              </button>
+            }
+          }
+        }
+        @if (!results().length) {
+          <p class="none">Nothing matches “{{ query() }}”.</p>
+        }
+      </div>
+      <p class="foot">
+        <span><kbd>↑</kbd> <kbd>↓</kbd> to move</span>
+        <span><kbd>Enter</kbd> to open</span>
+        <span><kbd>Ctrl</kbd> <kbd>K</kbd> anywhere to search</span>
+      </p>
+    </div>
+  </div>
+}

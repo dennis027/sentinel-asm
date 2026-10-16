@@ -1,68 +1,18 @@
 <div class="shell">
-  <nav class="sidebar">
-    <a routerLink="/dashboard" class="brand" title="Sentinel ASM">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </a>
+  <aside class="sidebar">
+    <div class="brand-row">
+      <a routerLink="/dashboard" class="brand">
+        <app-logo-mark class="brand-mark" [size]="32" />
+        <span class="brand-name">Den<span class="brand-accent">sight</span></span>
+      </a>
+      <app-activity-bell />
+    </div>
 
-    <a routerLink="/dashboard" routerLinkActive="active" class="nav-link" title="Dashboard">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/>
-        <rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>
-      </svg>
-      <span>Dashboard</span>
-    </a>
-
-    <a routerLink="/assets" routerLinkActive="active" class="nav-link" title="Assets">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/>
-        <circle cx="7" cy="7" r="0.5" fill="currentColor"/><circle cx="7" cy="17" r="0.5" fill="currentColor"/>
-      </svg>
-      <span>Assets</span>
-    </a>
-
-    <a routerLink="/scanners" routerLinkActive="active" class="nav-link" title="Scanners">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.5" fill="currentColor"/>
-      </svg>
-      <span>Scanners</span>
-    </a>
-
-    <a routerLink="/findings" routerLinkActive="active" class="nav-link" title="Findings">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M12 3 2 20h20L12 3Z" stroke-linejoin="round"/><path d="M12 10v4" stroke-linecap="round"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/>
-      </svg>
-      <span>Findings</span>
-    </a>
-
-    <a routerLink="/scan-history" routerLinkActive="active" class="nav-link" title="Scan History">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span>Scan History</span>
-    </a>
-
-    <a routerLink="/notification-rules" routerLinkActive="active" class="nav-link" title="Notifications">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M6 8a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" stroke-linejoin="round"/><path d="M10 20a2 2 0 0 0 4 0" stroke-linecap="round"/>
-      </svg>
-      <span>Notifications</span>
-    </a>
-
-    <button class="nav-link signout" (click)="auth.logout()" title="Sign out">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M16 17l5-5-5-5M21 12H9" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span>Sign out</span>
-    </button>
-  </nav>
-
-  <div class="main">
-    <div class="topbar">
-      @if (orgContext.allOrganizations().length > 0) {
+    @if (orgContext.allOrganizations().length > 0) {
+      <div class="org">
+        <label for="org-switcher">Organization</label>
         <select
+          id="org-switcher"
           class="org-switcher"
           [ngModel]="orgContext.selectedOrganization()?.id"
           (ngModelChange)="onOrgChange($event)"
@@ -71,14 +21,127 @@
             <option [value]="org.id">{{ org.name }}</option>
           }
         </select>
-      }
-      <div class="user-chip" (click)="goToAccountSettings()" role="button" tabindex="0">
-        <span class="avatar">{{ (auth.currentUsername() ?? '?').charAt(0).toUpperCase() }}</span>
-        <span class="username">{{ auth.currentUsername() }}</span>
+      </div>
+    }
+
+    <button class="search-button" (click)="search.open()" aria-label="Search (Ctrl+K)">
+      <app-icon name="search" [size]="16" />
+      <span>Search</span>
+      <kbd>Ctrl K</kbd>
+    </button>
+
+    <nav aria-label="Main">
+      <p class="nav-group">Overview</p>
+      <a routerLink="/dashboard" routerLinkActive="active" class="nav-link">
+        <app-icon name="dashboard" />
+        <span>Dashboard</span>
+      </a>
+      <a routerLink="/fix-plan" routerLinkActive="active" class="nav-link">
+        <app-icon name="wrench" />
+        <span>Fix plan</span>
+      </a>
+      <a routerLink="/my-work" routerLinkActive="active" class="nav-link">
+        <app-icon name="inbox" />
+        <span>My work</span>
+        @if (myWorkCount()) {
+          <span class="nav-count" [attr.aria-label]="myWorkCount() + ' open issues assigned to you'">{{ myWorkCount() }}</span>
+        }
+      </a>
+      <a routerLink="/findings" routerLinkActive="active" class="nav-link">
+        <app-icon name="findings" />
+        <span>Findings</span>
+      </a>
+
+      <p class="nav-group">Attack surface</p>
+      <a routerLink="/surface-map" routerLinkActive="active" class="nav-link">
+        <app-icon name="map" />
+        <span>Map</span>
+      </a>
+      <a routerLink="/assets" routerLinkActive="active" class="nav-link">
+        <app-icon name="assets" />
+        <span>Assets</span>
+      </a>
+      <a routerLink="/inventory" routerLinkActive="active" class="nav-link">
+        <app-icon name="package" />
+        <span>Inventory</span>
+      </a>
+      <a routerLink="/screenshots" routerLinkActive="active" class="nav-link">
+        <app-icon name="camera" />
+        <span>Screenshots</span>
+      </a>
+
+      <p class="nav-group">Scanning</p>
+      <a routerLink="/scanners" routerLinkActive="active" class="nav-link">
+        <app-icon name="scanners" />
+        <span>Scanners</span>
+      </a>
+      <a routerLink="/scan-history" routerLinkActive="active" class="nav-link">
+        <app-icon name="history" />
+        <span>Scan history</span>
+      </a>
+
+      <p class="nav-group">Governance</p>
+      <a routerLink="/compliance" routerLinkActive="active" class="nav-link">
+        <app-icon name="shield-check" />
+        <span>Compliance</span>
+      </a>
+      <a routerLink="/activity" routerLinkActive="active" class="nav-link">
+        <app-icon name="activity" />
+        <span>Activity</span>
+      </a>
+
+      <p class="nav-group">Settings</p>
+      <a routerLink="/notification-rules" routerLinkActive="active" class="nav-link">
+        <app-icon name="bell" />
+        <span>Alerts &amp; reports</span>
+      </a>
+      <a routerLink="/organization" routerLinkActive="active" class="nav-link">
+        <app-icon name="users" />
+        <span>Organization</span>
+      </a>
+    </nav>
+
+    <div class="footer">
+      <div class="theme" role="group" aria-label="Colour theme">
+        @for (option of themeOptions; track option.value) {
+          <button
+            [class.active]="theme.preference() === option.value"
+            [attr.aria-pressed]="theme.preference() === option.value"
+            [title]="option.label"
+            [attr.aria-label]="option.label"
+            (click)="theme.set(option.value)"
+          >
+            <app-icon [name]="option.icon" [size]="16" />
+          </button>
+        }
+      </div>
+
+      <div class="account">
+        <a class="user-chip" routerLink="/account-settings" routerLinkActive="active" title="Account settings">
+          <span class="avatar">{{ (auth.currentUsername() ?? '?').charAt(0).toUpperCase() }}</span>
+          <span class="username">{{ auth.currentUsername() }}</span>
+        </a>
+        <button class="signout" (click)="auth.logout()" title="Sign out" aria-label="Sign out">
+          <app-icon name="logout" />
+        </button>
       </div>
     </div>
-    <main class="content">
+  </aside>
+
+  <main class="content">
+    @if (orgContext.loadFailed()) {
+      <div class="page">
+        <p class="empty" role="alert">
+          Could not reach the server to load your organizations.
+          <button class="btn secondary small" (click)="orgContext.loadOrganizations()">Try again</button>
+        </p>
+      </div>
+    } @else {
       <router-outlet />
-    </main>
-  </div>
+    }
+  </main>
+  <app-toasts />
+  <app-confirm-dialog />
+  <app-command-palette />
+  <app-keyboard-shortcuts />
 </div>
