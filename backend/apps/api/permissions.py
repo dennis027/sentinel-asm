@@ -9,6 +9,8 @@ Superusers bypass scoping entirely (see all orgs) -- standard
 admin/support-access pattern, not a loophole specific to this app.
 """
 
+from rest_framework.exceptions import PermissionDenied
+
 from apps.organizations.models import Membership
 
 
@@ -27,6 +29,32 @@ def user_can_access_org(user, organization) -> bool:
     if user.is_superuser:
         return True
     return Membership.objects.filter(user=user, organization=organization).exists()
+
+
+def user_has_org_role(user, organization, minimum_role) -> bool:
+    """
+    True if the user's role in `organization` is `minimum_role` or
+    higher (see Membership.ROLE_RANK). Membership alone only grants
+    read access -- every write goes through this.
+    """
+    if user.is_superuser:
+        return True
+    role = (
+        Membership.objects.filter(user=user, organization=organization)
+        .values_list("role", flat=True)
+        .first()
+    )
+    if role is None:
+        return False
+    return Membership.ROLE_RANK[role] >= Membership.ROLE_RANK[minimum_role]
+
+
+def require_org_role(user, organization, minimum_role) -> None:
+    if not user_has_org_role(user, organization, minimum_role):
+        raise PermissionDenied(
+            f"This action requires the {Membership.Role(minimum_role).label} role or higher "
+            f"in this organization."
+        )
 
 
 class OrgScopedQuerysetMixin:
