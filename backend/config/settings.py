@@ -6,6 +6,7 @@ environment variables so the same image runs in dev, CI, and prod --
 only the .env / compose config changes.
 """
 
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -76,6 +77,18 @@ ALLOW_PRIVATE_SCAN_TARGETS = env.bool("ASM_ALLOW_PRIVATE_SCAN_TARGETS", default=
 # count and the weekly report. Info findings have no deadline.
 REMEDIATION_SLA_DAYS = {"critical": 7, "high": 30, "medium": 90, "low": 180}
 
+# Server logs (apps.logs). A server that sends nothing for this long
+# is flagged as silent.
+LOG_SOURCE_SILENT_AFTER_MINUTES = env.int("ASM_LOG_SOURCE_SILENT_AFTER_MINUTES", default=60)
+# Limits per ingest request, and per server per minute.
+LOG_INGEST_MAX_BYTES = env.int("ASM_LOG_INGEST_MAX_BYTES", default=5_000_000)
+LOG_INGEST_MAX_RECORDS = env.int("ASM_LOG_INGEST_MAX_RECORDS", default=10_000)
+LOG_INGEST_MAX_REQUESTS_PER_MINUTE = env.int("ASM_LOG_INGEST_MAX_REQUESTS_PER_MINUTE", default=600)
+# The address servers send their logs to, as they can reach it (e.g.
+# https://densight.example.com/api/ingest/). Empty: worked out from the
+# request, which is wrong behind some proxies and in local development.
+LOG_INGEST_URL = env("ASM_LOG_INGEST_URL", default="")
+
 # How many pages the screenshot scanner captures per asset: the landing
 # page plus the pages it links to on the same host. 1 = landing page only.
 SCREENSHOT_MAX_PAGES = env.int("ASM_SCREENSHOT_MAX_PAGES", default=6)
@@ -102,6 +115,7 @@ INSTALLED_APPS = [
     "django_filters",
     "drf_spectacular",    
     "django_celery_beat",
+    "django.contrib.postgres",
     "health",
     "apps.organizations",
     "apps.assets",
@@ -110,6 +124,7 @@ INSTALLED_APPS = [
     "apps.notifications",
     "apps.api",
     "apps.audit_logs",
+    "apps.logs",
 ]
 
 MIDDLEWARE = [
@@ -288,6 +303,9 @@ LOGGING = {
     "formatters": {
         "json": {"()": "config.logging_utils.JsonFormatter"},
     },
+    "filters": {
+        "skip_log_pipeline": {"()": "apps.logs.self_logging.SkipLogPipeline"},
+    },
     "handlers": {
         "console": {"class": "logging.StreamHandler", "formatter": "json"},
     },
@@ -302,6 +320,26 @@ LOGGING = {
     },
 }
 
+# Densight watching itself: with DENSIGHT_LOG_KEY set (the ingest key of
+# a Python app connected under Logs), the API, worker and beat send their
+# own logs -- errors with stack traces, failed scans, warnings -- to
+# Densight's log ingest, like any other application. Off in tests.
+DENSIGHT_LOG_KEY = env("DENSIGHT_LOG_KEY", default="")
+if DENSIGHT_LOG_KEY and "test" not in sys.argv:
+    LOGGING["handlers"]["densight"] = {
+        "class": "apps.logs.clients.densight_logging.DensightHandler",
+        # The API container's address on the compose network, reachable from all three containers.
+        "url": env("DENSIGHT_LOG_URL", default="http://api:8000/api/ingest/"),
+        "key": DENSIGHT_LOG_KEY,
+        "service": env("DENSIGHT_LOG_SERVICE", default="densight-" + (
+            "worker" if "worker" in sys.argv else "beat" if "beat" in sys.argv else "api")),
+        "environment": env("DENSIGHT_LOG_ENVIRONMENT", default="development" if DEBUG else "production"),
+        "level": env("DENSIGHT_LOG_LEVEL", default="INFO"),
+        "filters": ["skip_log_pipeline"],
+    }
+    LOGGING["root"]["handlers"].append("densight")
+    for logger in LOGGING["loggers"].values():
+        logger["handlers"].append("densight")
 
 
 # ---- Celery -----------------------------------------------------------

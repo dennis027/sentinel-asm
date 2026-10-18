@@ -93,6 +93,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/activity/activity').then((m) => m.Activity),
       },
       {
+        path: 'logs',
+        title: 'Logs · Densight',
+        loadComponent: () => import('./features/logs/logs').then((m) => m.Logs),
+      },
+      {
         path: 'screenshots',
         title: 'Screenshots · Densight',
         loadComponent: () => import('./features/screenshots/screenshots').then((m) => m.Screenshots),
