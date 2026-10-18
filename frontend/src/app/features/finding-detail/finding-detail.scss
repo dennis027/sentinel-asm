@@ -136,3 +136,11 @@ dd.late { color: var(--color-danger); font-weight: 600; }
   .layout { grid-template-columns: 1fr; }
   .side { position: static; }
 }
+
+.kev {
+  border-color: var(--color-danger);
+  background: var(--color-danger-bg);
+  margin-bottom: var(--space-4);
+  .panel-title { display: flex; align-items: center; gap: 6px; color: var(--color-danger); }
+  p:last-child { margin-bottom: 0; }
+}

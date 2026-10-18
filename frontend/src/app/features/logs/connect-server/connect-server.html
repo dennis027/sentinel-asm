@@ -1,0 +1,54 @@
+<div class="connect">
+  <div class="key-box" role="status">
+    <p><strong>Ingest key for {{ source().name }}</strong>: copy it now; it is shown only this once. It is already filled in
+      below.</p>
+    <div class="key-row">
+      <code>{{ source().key }}</code>
+      <button class="btn secondary small" (click)="copy(source().key ?? '')"><app-icon name="copy" [size]="13" /> Copy</button>
+    </div>
+  </div>
+
+  @if (target().local) {
+    <p class="warn">
+      <app-icon name="findings" [size]="14" />
+      <span>
+        The address below is <code>{{ target().host }}</code>, which only works on this computer. In production, set
+        <code>ASM_LOG_INGEST_URL</code> to the address servers can reach, such as
+        <code>https://densight.yourcompany.com/api/ingest/</code>.
+      </span>
+    </p>
+  }
+
+  <ol class="steps">
+    @for (step of steps(); track step.title; let i = $index) {
+      <li>
+        <span class="num">{{ i + 1 }}</span>
+        <div class="step-body">
+          <p class="step-title">{{ step.title }}</p>
+          @if (step.text) {
+            <p class="step-text">{{ step.text }}</p>
+          }
+          @if (step.code) {
+            <div class="code">
+              <pre>{{ step.code }}</pre>
+              <button class="copy" (click)="copy(step.code)" aria-label="Copy"><app-icon name="copy" [size]="14" /></button>
+            </div>
+          }
+        </div>
+      </li>
+    }
+  </ol>
+
+  <div class="live" [class.ok]="status() === 'receiving'">
+    @if (status() === 'receiving') {
+      <app-icon name="check" [size]="18" />
+      <span><strong>Receiving logs</strong>: {{ received() }} so far. You can close this.</span>
+    } @else {
+      <span class="spinner" aria-hidden="true"></span>
+      <span>Waiting for the first logs from <strong>{{ source().name }}</strong>… this checks every few seconds.</span>
+    }
+    <button class="btn small" [class.secondary]="status() !== 'receiving'" (click)="done.emit()">
+      {{ status() === 'receiving' ? 'Done' : 'Finish later' }}
+    </button>
+  </div>
+</div>

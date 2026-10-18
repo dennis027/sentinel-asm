@@ -1,0 +1,194 @@
+<form class="searchbar" (ngSubmit)="submitText()">
+  <app-icon name="search" [size]="16" />
+  <input type="search" name="q" autocomplete="off" aria-label="Search the logs"
+         placeholder="Search messages… or filter: level:error service:payments status:5xx user:alice"
+         [ngModel]="text()" (ngModelChange)="text.set($event)" />
+  <button class="btn" type="submit">Search</button>
+</form>
+
+<div class="filters">
+  <select aria-label="Source" [ngModel]="filters().source" (ngModelChange)="set({ source: $event })">
+    <option value="">All servers and apps</option>
+    @for (s of sources(); track s.id) {
+      <option [value]="s.id">{{ s.name }} ({{ sourceCount(s.id) | number }})</option>
+    }
+  </select>
+  <select aria-label="Kind of event" [ngModel]="filters().category" (ngModelChange)="set({ category: $event })">
+    <option value="">Every kind</option>
+    @for (c of categories; track c.value) {
+      <option [value]="c.value">{{ c.label }} ({{ categoryCount(c.value) | number }})</option>
+    }
+  </select>
+  <select aria-label="Level" [ngModel]="filters().level" (ngModelChange)="set({ level: $event })">
+    <option value="">Any level</option>
+    @for (l of levels; track l.value) {
+      <option [value]="l.value">{{ l.label }} ({{ levelCount(l.value) | number }})</option>
+    }
+  </select>
+  @if (hasApps()) {
+    <select aria-label="Response status" [ngModel]="filters().status" (ngModelChange)="set({ status: $event })">
+      <option value="">Any status</option>
+      <option value="5xx">5xx server errors ({{ statusCount('5xx') | number }})</option>
+      <option value="4xx">4xx ({{ statusCount('4xx') | number }})</option>
+      <option value="3xx">3xx ({{ statusCount('3xx') | number }})</option>
+      <option value="2xx">2xx ({{ statusCount('2xx') | number }})</option>
+    </select>
+  }
+  <select aria-label="Time range" [ngModel]="filters().around ? 'custom' : since()" (ngModelChange)="setSince($event)">
+    @for (o of sinceOptions; track o.value) {
+      <option [value]="o.value">{{ o.label }}</option>
+    }
+  </select>
+  <button type="button" class="btn secondary more" [class.on]="showMore()" (click)="showMore.set(!showMore())"
+          [attr.aria-expanded]="showMore()">
+    <app-icon name="filter" [size]="14" /> More filters
+  </button>
+</div>
+
+@if (since() === 'custom' && !filters().around) {
+  <div class="range">
+    <label>From <input type="datetime-local" [value]="localInput(filters().after)" (change)="setRange('after', $any($event.target).value)" /></label>
+    <label>To <input type="datetime-local" [value]="localInput(filters().before)" (change)="setRange('before', $any($event.target).value)" /></label>
+    <span class="muted small">Leave "To" empty to keep following new events.</span>
+  </div>
+}
+
+@if (showMore()) {
+  <div class="more-filters panel">
+    <label>Service
+      <select [ngModel]="filters().service" (ngModelChange)="set({ service: $event })">
+        <option value="">Any service</option>
+        @for (o of options('service'); track o[0]) {
+          <option [value]="o[0]">{{ o[0] }} ({{ o[1] | number }})</option>
+        }
+      </select>
+    </label>
+    <label>Release
+      <select [ngModel]="filters().release" (ngModelChange)="set({ release: $event })">
+        <option value="">Any release</option>
+        @for (o of options('release'); track o[0]) {
+          <option [value]="o[0]">{{ o[0] }} ({{ o[1] | number }})</option>
+        }
+      </select>
+    </label>
+    <label>Host
+      <select [ngModel]="filters().host" (ngModelChange)="set({ host: $event })">
+        <option value="">Any host</option>
+        @for (o of options('host'); track o[0]) {
+          <option [value]="o[0]">{{ o[0] }} ({{ o[1] | number }})</option>
+        }
+      </select>
+    </label>
+    <label>User
+      <input #userBox placeholder="alice" [value]="filters().user" (change)="set({ user: userBox.value.trim() })" />
+    </label>
+    <label>Address
+      <input #ipBox placeholder="203.0.113.9" [value]="filters().ip" (change)="set({ ip: ipBox.value.trim() })" />
+    </label>
+  </div>
+}
+
+@if (chips().length) {
+  <div class="chips" aria-label="Active filters">
+    @for (c of chips(); track c.key) {
+      <span class="chip">{{ c.label }}
+        <button type="button" (click)="remove(c.key)" [attr.aria-label]="'Remove ' + c.label"><app-icon name="x" [size]="12" /></button>
+      </span>
+    }
+    <button type="button" class="linkish" (click)="clearAll()">Clear all</button>
+  </div>
+}
+
+@if (timeline(); as t) {
+  <div class="timeline" role="img" [attr.aria-label]="'Matching events over time, ' + t.buckets.length + ' bars'">
+    <div class="bars">
+      @for (b of t.buckets; track b.t) {
+        <button type="button" class="bar" [title]="barTitle(b)" (click)="zoom(b)"
+                [attr.aria-label]="barTitle(b)">
+          <span class="stack" [style.height.%]="((b.error + b.warning + b.info) / maxBar()) * 100">
+            <span class="seg error" [style.flex-grow]="b.error"></span>
+            <span class="seg warning" [style.flex-grow]="b.warning"></span>
+            <span class="seg info" [style.flex-grow]="b.info"></span>
+          </span>
+        </button>
+      }
+    </div>
+    <div class="axis"><span>{{ t.start | date: 'MMM d, HH:mm' }}</span><span>{{ t.end | date: 'MMM d, HH:mm' }}</span></div>
+  </div>
+}
+
+<div class="toolbar">
+  <p class="muted count">{{ eventCount() | plural: 'event' }}{{ isSearching() ? ' · searching…' : '' }}</p>
+  <div class="tools">
+    <button type="button" class="live" [class.on]="isLive()" (click)="toggleLive()" [disabled]="!live() ? false : !isLive()"
+            [title]="isLive() ? 'New events appear as they arrive. Click to pause.' : live() ? 'Live updates only follow the first page of an open-ended time range.' : 'Paused. Click to show new events as they arrive.'">
+      <span class="dot"></span>{{ isLive() ? 'Live' : 'Paused' }}
+    </button>
+    <button type="button" class="btn secondary small" (click)="exportCsv()" [disabled]="!eventCount()">
+      <app-icon name="download" [size]="13" /> Export CSV
+    </button>
+  </div>
+</div>
+
+@if (events().length === 0 && !isSearching()) {
+  <app-empty-state art="search" title="No events match">
+    {{ chips().length ? 'Try removing a filter or a longer time range.' : 'Events appear here as your servers and apps send them.' }}
+  </app-empty-state>
+} @else {
+  <div class="events panel">
+    @for (e of events(); track e.id) {
+      <div class="event" [class.open]="expandedEvent() === e.id" [class.warn]="e.level === 'warning'"
+           [class.err]="e.level === 'error'" [class.fresh]="fresh().has(e.id)">
+        <button class="event-row" (click)="toggleEvent(e.id)" [attr.aria-expanded]="expandedEvent() === e.id">
+          <span class="time">{{ e.occurred_at | date: 'MMM d HH:mm:ss' }}</span>
+          <span class="cat cat-{{ e.category }}">{{ e.category_label }}</span>
+          <span class="where">{{ e.source_name }} · {{ e.service || e.program || '—' }}{{ e.event_id ? ' ' + e.event_id : '' }}{{ e.http_status ? ' · ' + e.http_status : '' }}</span>
+          <span class="msg">{{ e.message }}</span>
+        </button>
+        @if (expandedEvent() === e.id) {
+          <div class="event-detail">
+            <dl>
+              <dt>Source</dt><dd><button class="linkish" (click)="filterBy('source', e.source)">{{ e.source_name }}</button>{{ e.host ? ' (' : '' }}@if (e.host) {<button class="linkish" (click)="filterBy('host', e.host)">{{ e.host }}</button>)}</dd>
+              <dt>When</dt><dd>{{ e.occurred_at | date: 'medium' }}</dd>
+              <dt>Level</dt><dd><button class="linkish" (click)="filterBy('level', e.level)">{{ e.level }}</button> · {{ e.category_label }}{{ e.action ? ' (' + e.action + ')' : '' }}</dd>
+              @if (e.service) {
+                <dt>Service</dt><dd><button class="linkish" (click)="filterBy('service', e.service)">{{ e.service }}</button></dd>
+              }
+              @if (e.release) {
+                <dt>Release</dt><dd><button class="linkish" (click)="filterBy('release', e.release)">{{ e.release }}</button></dd>
+              }
+              @if (e.user) {
+                <dt>User</dt><dd><button class="linkish" (click)="filterBy('user', e.user)">{{ e.user }}</button></dd>
+              }
+              @if (e.src_ip) {
+                <dt>From</dt><dd><button class="linkish" (click)="filterBy('ip', e.src_ip)">{{ e.src_ip }}</button></dd>
+              }
+              @if (e.http_status) {
+                <dt>Status</dt><dd><button class="linkish" (click)="filterBy('status', e.http_status + '')">{{ e.http_status }}</button></dd>
+              }
+              <dt>Message</dt><dd class="full-msg">{{ e.message }}</dd>
+              @if (e.redacted.length) {
+                <dt>Masked</dt><dd><span class="badge tone-serious">{{ e.redacted.join(', ') }}</span> removed before storing</dd>
+              }
+            </dl>
+            @if (stackOf(e); as stack) {
+              <pre class="stack">{{ stack }}</pre>
+            }
+            @if (e.fingerprint) {
+              <button class="btn secondary small" (click)="filterBy('fingerprint', e.fingerprint)">
+                <app-icon name="search" [size]="12" /> Every occurrence of this error
+              </button>
+            }
+            <details>
+              <summary>As received</summary>
+              <pre>{{ rawText(e) }}</pre>
+            </details>
+          </div>
+        }
+      </div>
+    }
+  </div>
+  @if (!isLive() || page() > 1) {
+    <app-pager [page]="page()" [count]="eventCount()" [pageSize]="pageSize" (pageChange)="onPage($event)" />
+  }
+}

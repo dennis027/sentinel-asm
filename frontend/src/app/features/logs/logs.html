@@ -1,0 +1,275 @@
+<div class="page">
+  <div class="header">
+    <div>
+      <h1>Logs</h1>
+      <p class="muted">
+        Your servers' sign-ins and admin activity, and your applications' errors and requests, watched for signs of an
+        attack or an outage.
+      </p>
+    </div>
+    @if (orgContext.canManageSettings() && hasServers()) {
+      <div>
+        <button class="btn" (click)="startConnecting()"><app-icon name="plus" [size]="14" /> Connect a server or app</button>
+      </div>
+    }
+  </div>
+
+  @if (isLoading()) {
+    <p class="loading">Loading…</p>
+  } @else if (setupFor(); as source) {
+    <div class="panel">
+      <p class="panel-title">Connect {{ source.name }} ({{ kindLabel(source) }})</p>
+      <app-connect-server [source]="source" (done)="finishSetup()" />
+    </div>
+  } @else if (!hasServers() && !isConnecting()) {
+    <div class="panel intro">
+      <span class="intro-icon"><app-icon name="server" [size]="24" /></span>
+      <h2>See what happens on your servers and in your apps, not just what they expose</h2>
+      <p class="muted">
+        Connect a server and Densight watches its logs for the signs of an attack: someone guessing passwords, a sign-in
+        that worked after many failures, a new administrator, a cleared log. Connect a Python or Node.js app and it
+        groups the app's errors, spots error spikes and attack probes, and masks any secrets the app logs. Setup takes
+        about five minutes.
+      </p>
+      @if (orgContext.canManageSettings()) {
+        <button class="btn" (click)="startConnecting()"><app-icon name="plus" [size]="14" /> Connect your first server or app</button>
+      } @else {
+        <p class="muted">An admin of this organization can connect servers.</p>
+      }
+    </div>
+  } @else {
+    @if (overview(); as o) {
+      <div class="kpis">
+        <button class="kpi" [class.bad]="o.open_detections > 0" (click)="select('detections')">
+          <span class="n">{{ o.open_detections | number }}</span>
+          <span class="l">Open detections</span>
+          @if (severityCount('critical')) {
+            <span class="sub bad">{{ severityCount('critical') }} critical</span>
+          }
+        </button>
+        <button class="kpi" (click)="showFailedSignins()">
+          <span class="n">{{ o.failed_signins_24h | number }}</span>
+          <span class="l">Failed sign-ins, 24 h</span>
+          @if (o.top_attackers_24h[0]; as top) {
+            <span class="sub">Most from {{ top.ip }} ({{ top.failures }})</span>
+          }
+        </button>
+        @if (o.applications > 0) {
+          <button class="kpi" [class.bad]="o.unresolved_errors > 0" (click)="select('errors')">
+            <span class="n">{{ o.unresolved_errors | number }}</span>
+            <span class="l">Unresolved app errors</span>
+            <span class="sub">{{ o.errors_24h | number }} errors, {{ o.server_errors_24h | number }} 5xx in 24 h</span>
+          </button>
+        } @else {
+          <button class="kpi" (click)="select('search')">
+            <span class="n">{{ o.events_24h | number }}</span>
+            <span class="l">Events, 24 h</span>
+          </button>
+        }
+        <button class="kpi" [class.bad]="o.sources.silent > 0" (click)="select('servers')">
+          <span class="n">{{ o.sources.receiving }}<small>/{{ o.sources.total }}</small></span>
+          <span class="l">Sending logs</span>
+          @if (o.sources.silent) {
+            <span class="sub bad">{{ o.sources.silent }} gone quiet</span>
+          }
+        </button>
+      </div>
+    }
+
+    <div class="tabs" role="tablist">
+      <button role="tab" [attr.aria-selected]="tab() === 'detections'" [class.active]="tab() === 'detections'" (click)="select('detections')">
+        <app-icon name="findings" [size]="15" /> Detections
+      </button>
+      @if (hasApps()) {
+        <button role="tab" [attr.aria-selected]="tab() === 'errors'" [class.active]="tab() === 'errors'" (click)="select('errors')">
+          <app-icon name="bug" [size]="15" /> Errors
+          @if (overview()?.unresolved_errors) {
+            <span class="n-pill">{{ overview()?.unresolved_errors }}</span>
+          }
+        </button>
+      }
+      <button role="tab" [attr.aria-selected]="tab() === 'search'" [class.active]="tab() === 'search'" (click)="select('search')">
+        <app-icon name="search" [size]="15" /> Search events
+      </button>
+      <button role="tab" [attr.aria-selected]="tab() === 'servers'" [class.active]="tab() === 'servers'" (click)="select('servers')">
+        <app-icon name="server" [size]="15" /> Sources <span class="n-pill">{{ sources().length }}</span>
+      </button>
+      <button role="tab" [attr.aria-selected]="tab() === 'rules'" [class.active]="tab() === 'rules'" (click)="select('rules')">
+        <app-icon name="shield-check" [size]="15" /> What we watch for
+      </button>
+    </div>
+
+    @switch (tab()) {
+      @case ('detections') {
+        <div class="det-filters">
+          <div class="toggle">
+            <button [class.active]="detectionStatus() === 'open'" (click)="showDetections('open')">Open</button>
+            <button [class.active]="detectionStatus() === 'resolved'" (click)="showDetections('resolved')">Dealt with</button>
+          </div>
+          <form (ngSubmit)="filterDetections({ q: detectionText().trim() || undefined })">
+            <input type="search" name="dq" placeholder="Search detections…" aria-label="Search detections"
+                   [ngModel]="detectionText()" (ngModelChange)="detectionText.set($event)" />
+          </form>
+          <select aria-label="Severity" [ngModel]="detectionFilters().severity ?? ''" (ngModelChange)="filterDetections({ severity: $event || undefined })">
+            <option value="">Any severity</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <select aria-label="Source" [ngModel]="detectionFilters().source ?? ''" (ngModelChange)="filterDetections({ source: $event || undefined })">
+            <option value="">All servers and apps</option>
+            @for (s of sources(); track s.id) {
+              <option [value]="s.id">{{ s.name }}</option>
+            }
+          </select>
+          <select aria-label="Detection" [ngModel]="detectionFilters().rule ?? ''" (ngModelChange)="filterDetections({ rule: $event || undefined })">
+            <option value="">Every detection</option>
+            <option value="custom">Your own alerts</option>
+            @for (r of rules(); track r.rule) {
+              <option [value]="r.rule">{{ r.title }}</option>
+            }
+          </select>
+        </div>
+        @if (detections().length === 0) {
+          <app-empty-state art="shield" [title]="detectionStatus() === 'open' ? 'Nothing suspicious' : 'Nothing dealt with yet'">
+            @if (detectionStatus() === 'open') {
+              No sign of an attack or an outage. See “What we watch for” for what is checked. This page updates by itself.
+            }
+          </app-empty-state>
+        } @else {
+          <ul class="detections">
+            @for (d of detections(); track d.id) {
+              <li class="panel detection" [class.new]="newDetections().has(d.id)">
+                <span class="badge severity-{{ d.severity }}">{{ d.severity }}</span>
+                <div class="d-main">
+                  <p class="d-title">{{ d.title }}</p>
+                  <p class="d-meta">
+                    <app-icon name="server" [size]="12" /> {{ d.source_name }}
+                    · {{ d.event_count | plural: 'event' }}
+                    · {{ d.first_seen | date: 'MMM d, HH:mm' }}{{ d.last_seen !== d.first_seen ? ' – ' + (d.last_seen | date: 'MMM d, HH:mm') : '' }}
+                  </p>
+                  <p class="d-desc">{{ d.description }}</p>
+                  <div class="d-actions">
+                    <button class="btn secondary small" (click)="viewEvents(d)"><app-icon name="search" [size]="12" /> View events</button>
+                    @if (orgContext.canTriageFindings()) {
+                      @if (d.status === 'open') {
+                        <button class="btn secondary small" (click)="resolve(d)"><app-icon name="check" [size]="12" /> Mark as dealt with</button>
+                      } @else {
+                        <button class="btn secondary small" (click)="resolve(d, true)">Reopen</button>
+                        <span class="muted small">by {{ d.resolved_by || 'system' }}, {{ d.resolved_at | date: 'MMM d' }}</span>
+                      }
+                    }
+                  </div>
+                </div>
+              </li>
+            }
+          </ul>
+          <app-pager [page]="detectionPage()" [count]="detectionCount()" (pageChange)="onDetectionPage($event)" />
+        }
+      }
+
+      @case ('errors') {
+        <app-error-groups [canTriage]="orgContext.canTriageFindings()" [sources]="appSources()" (occurrences)="viewOccurrences($event)"
+                          (changed)="refreshOverview()" />
+      }
+
+      @case ('search') {
+        <app-event-search [sources]="sources()" [hasApps]="hasApps()" />
+      }
+
+      @case ('servers') {
+        @if (isConnecting()) {
+          <form class="panel connect-form" (ngSubmit)="connect()">
+            <p class="panel-title">Connect a server or app</p>
+            <label for="server-name">Name</label>
+            <input id="server-name" name="name" placeholder="web-01, orders-api…" maxlength="100"
+                   [ngModel]="newName()" (ngModelChange)="newName.set($event)" />
+            <span class="label">It runs</span>
+            <div class="os-choices">
+              @for (k of kinds; track k.value) {
+                <button type="button" class="os" [class.selected]="newOs() === k.value" (click)="newOs.set(k.value)">
+                  <app-icon [name]="k.icon" [size]="18" /><span><strong>{{ k.label }}</strong><small>{{ k.hint }}</small></span>
+                </button>
+              }
+            </div>
+            @if (connectError()) {
+              <p class="error" role="alert">{{ connectError() }}</p>
+            }
+            <div class="form-actions">
+              <button class="btn" type="submit" [disabled]="!newName().trim()">Continue to setup</button>
+              <button class="btn secondary" type="button" (click)="isConnecting.set(false)">Cancel</button>
+            </div>
+          </form>
+        }
+        <table class="panel servers">
+          <thead>
+            <tr><th>Source</th><th>Status</th><th>Last log</th><th>Events</th><th>Detections</th><th></th></tr>
+          </thead>
+          <tbody>
+            @for (s of sources(); track s.id) {
+              <tr>
+                <td>
+                  <span class="server-name"><app-icon [name]="s.is_application ? 'package' : s.os === 'windows' ? 'monitor' : 'server'" [size]="14" /> {{ s.name }}</span>
+                  <span class="muted small">{{ kindLabel(s) }}</span>
+                  @if (s.last_host && s.last_host !== s.name) {
+                    <span class="muted small">{{ s.last_host }}</span>
+                  }
+                </td>
+                <td><span class="status status-{{ s.status }}">{{ s.status === 'receiving' ? 'Receiving' : s.status === 'silent' ? 'Gone quiet' : 'Waiting for first logs' }}</span></td>
+                <td class="muted">{{ s.last_seen_at ? (s.last_seen_at | date: 'MMM d, HH:mm') : '—' }}</td>
+                <td>{{ s.events_received | number }}</td>
+                <td>
+                  @if (s.open_detections) {
+                    <span class="badge tone-danger">{{ s.open_detections }} open</span>
+                  } @else {
+                    <span class="muted">—</span>
+                  }
+                </td>
+                <td class="right">
+                  @if (orgContext.canManageSettings()) {
+                    <button class="btn secondary small" (click)="replaceKey(s)">Setup steps</button>
+                    <button class="icon-btn" (click)="disconnect(s)" [attr.aria-label]="'Disconnect ' + s.name" title="Disconnect">
+                      <app-icon name="x" [size]="14" />
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        @if (overview(); as o) {
+          <div class="retention">
+            <app-icon name="calendar" [size]="16" />
+            <span>Keep logs for</span>
+            @if (orgContext.canManageSettings()) {
+              <select aria-label="How long to keep logs" [ngModel]="o.retention_days" (ngModelChange)="setRetention($event)">
+                @for (days of retention; track days) {
+                  <option [value]="days">{{ days }} days</option>
+                }
+              </select>
+            } @else {
+              <strong>{{ o.retention_days }} days</strong>
+            }
+            <span class="muted">Older events are deleted every night. Detections are kept.</span>
+          </div>
+        }
+      }
+
+      @case ('rules') {
+        <app-log-alerts [sources]="sources()" [canEdit]="orgContext.canTriageFindings()" />
+        <h2 class="builtin">Built-in detections</h2>
+        <p class="muted">Every server's and app's events are checked as they arrive. A repeat of the same thing updates one detection
+          rather than adding another, and new detections are sent to your <a routerLink="/notification-rules">alerts</a> by severity.</p>
+        <ul class="rules panel">
+          @for (r of overview()?.rules ?? []; track r.rule) {
+            <li>
+              <span class="badge severity-{{ r.severity }}">{{ r.severity }}</span>
+              <div><p class="r-title">{{ r.title }}</p><p class="muted">{{ r.description }}</p></div>
+            </li>
+          }
+        </ul>
+      }
+    }
+  }
+</div>

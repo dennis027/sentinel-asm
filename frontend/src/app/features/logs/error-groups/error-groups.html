@@ -1,0 +1,95 @@
+<div class="errors-head">
+  <div class="toggle">
+    <button [class.active]="errorStatus() === 'unresolved'" (click)="showErrors('unresolved')">Unresolved</button>
+    <button [class.active]="errorStatus() === 'resolved'" (click)="showErrors('resolved')">Resolved</button>
+    <button [class.active]="errorStatus() === 'ignored'" (click)="showErrors('ignored')">Ignored</button>
+  </div>
+  <form class="err-search" (ngSubmit)="search()">
+    <input type="search" name="eq" placeholder="Search errors…" aria-label="Search errors"
+           [ngModel]="text()" (ngModelChange)="text.set($event)" />
+  </form>
+  @if (sources().length > 1) {
+    <select aria-label="App" [ngModel]="sourceFilter()" (ngModelChange)="filterSource($event)">
+      <option value="">All apps</option>
+      @for (s of sources(); track s.id) {
+        <option [value]="s.id">{{ s.name }}</option>
+      }
+    </select>
+  }
+  <select aria-label="Sort errors" [ngModel]="errorSort()" (ngModelChange)="sortErrors($event)">
+    <option value="recent">Most recent</option>
+    <option value="count">Most frequent</option>
+    <option value="new">Newest first</option>
+  </select>
+</div>
+@if (releases().length) {
+  <div class="releases" aria-label="Recent releases">
+    <span class="rl-label">Releases</span>
+    @for (r of releases(); track r.source + r.release) {
+      <button class="release" [class.active]="releaseFilter() === r.release" [class.bad]="r.new_errors > 0"
+              (click)="filterRelease(r.release)"
+              [title]="'First logged ' + (r.first_seen | date: 'MMM d, HH:mm') + '. Show errors that first appeared in it.'">
+        <span class="rl-name">{{ r.source_name }} <strong>{{ r.release }}</strong></span>
+        <span class="rl-meta">
+          {{ r.first_seen | date: 'MMM d' }} ·
+          @if (r.new_errors) { {{ r.new_errors }} new {{ r.new_errors === 1 ? 'error' : 'errors' }} } @else { no new errors }
+        </span>
+      </button>
+    }
+  </div>
+}
+@if (releaseFilter()) {
+  <p class="filter-chip">
+    Showing errors that first appeared in <strong>{{ releaseFilter() }}</strong>
+    <button class="btn secondary small" (click)="filterRelease(releaseFilter())">Clear</button>
+  </p>
+}
+@if (errorGroups().length === 0) {
+  <app-empty-state art="shield" [title]="errorStatus() === 'unresolved' ? 'No unresolved errors' : 'Nothing here'">
+    Each distinct error your apps log appears here once, however many times it happens.
+  </app-empty-state>
+} @else {
+  <div class="panel error-list">
+    @for (g of errorGroups(); track g.id) {
+      <div class="error-group" [class.open]="expandedError() === g.id">
+        <button class="error-row" (click)="toggleError(g.id)" [attr.aria-expanded]="expandedError() === g.id">
+          <span class="e-main">
+            <span class="e-type">{{ g.exception_type || 'Error' }}</span>
+            <span class="e-title">{{ g.title }}</span>
+            <span class="e-meta">
+              {{ g.culprit || g.service || g.source_name }} · {{ g.source_name }}
+              · first {{ g.first_seen | date: 'MMM d' }}
+              @if (g.first_release) { in {{ g.first_release }} }
+              @if (g.last_release && g.last_release !== g.first_release) { · latest in {{ g.last_release }} }
+              @if (g.regressions) { · <strong class="bad">came back {{ g.regressions }}×</strong> }
+            </span>
+          </span>
+          <span class="e-count">{{ g.count | number }}<small>events</small></span>
+          <span class="e-when">{{ g.last_seen | date: 'MMM d, HH:mm' }}</span>
+        </button>
+        @if (expandedError() === g.id) {
+          <div class="error-detail">
+            @if (g.stacktrace) {
+              <pre class="stack">{{ g.stacktrace }}</pre>
+            }
+            <div class="d-actions">
+              <button class="btn secondary small" (click)="occurrences.emit(g)"><app-icon name="search" [size]="12" /> Every occurrence</button>
+              @if (canTriage()) {
+                @if (g.status !== 'resolved') {
+                  <button class="btn secondary small" (click)="setErrorStatus(g, 'resolved')"><app-icon name="check" [size]="12" /> Resolve</button>
+                }
+                @if (g.status !== 'ignored') {
+                  <button class="btn secondary small" (click)="setErrorStatus(g, 'ignored')">Ignore</button>
+                }
+                @if (g.status !== 'unresolved') {
+                  <button class="btn secondary small" (click)="setErrorStatus(g, 'unresolved')">Reopen</button>
+                }
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </div>
+  <app-pager [page]="errorPage()" [count]="errorCount()" (pageChange)="onErrorPage($event)" />
+}

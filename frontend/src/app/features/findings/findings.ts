@@ -24,7 +24,7 @@ type FindingView = 'open' | 'triaged' | 'resolved';
 type FindingKind = 'issue' | 'inventory' | '';
 // Remediation views: everything, mine, nobody's, past the fix-by date,
 // fixed once and found again, or on the hosts that matter most.
-type Workflow = '' | 'mine' | 'unassigned' | 'overdue' | 'regressed' | 'crown';
+type Workflow = '' | 'mine' | 'unassigned' | 'overdue' | 'regressed' | 'crown' | 'kev';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -151,6 +151,7 @@ export class Findings implements OnDestroy {
         // Links from the dashboard open a remediation view directly.
         if (params?.get('overdue')) this.workflow.set('overdue');
         else if (params?.get('regressed')) this.workflow.set('regressed');
+        else if (params?.get('kev')) this.workflow.set('kev');
         else if (params?.get('assignee') === 'me') this.workflow.set('mine');
         else if (params?.get('assignee') === 'none') this.workflow.set('unassigned');
         this.page.set(1);
@@ -384,6 +385,7 @@ export class Findings implements OnDestroy {
         overdue: this.workflow() === 'overdue' ? true : undefined,
         regressed: this.workflow() === 'regressed' ? true : undefined,
         asset_criticality: this.workflow() === 'crown' ? 'crown_jewel' : undefined,
+        known_exploited: this.workflow() === 'kev' ? true : undefined,
         is_active: view !== 'resolved',
         triaged: view === 'resolved' ? undefined : view === 'triaged',
         page: this.page(),

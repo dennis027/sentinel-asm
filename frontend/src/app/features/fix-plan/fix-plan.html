@@ -35,8 +35,8 @@
           }
         </ol>
         <p class="muted small">
-          {{ plan.steps.length }} fixes cover every open issue. Worst first; among equals, the ones touching
-          crown-jewel hosts, then the ones that close the most issues.
+          {{ plan.steps.length }} fixes cover every open issue. Anything attackers are known to be exploiting comes first,
+          then the worst; among equals, the ones touching crown-jewel hosts, then the ones that close the most issues.
         </p>
       </div>
 
@@ -51,6 +51,9 @@
                   <span class="badge severity-{{ step.severity }}">{{ step.severity }}</span>
                   <span>{{ step.issues }} issue{{ step.issues === 1 ? '' : 's' }} on {{ step.hosts }}
                     host{{ step.hosts === 1 ? '' : 's' }}</span>
+                  @if (step.known_exploited) {
+                    <span class="badge tone-danger" title="In CISA's Known Exploited Vulnerabilities catalogue">Exploited in the wild</span>
+                  }
                   @if (step.crown_jewels) {
                     <span class="badge jewel"><app-icon name="gem" [size]="12" /> Crown jewel</span>
                   }

@@ -46,6 +46,7 @@
       <option value="overdue">Past fix-by date</option>
       <option value="regressed">Came back after a fix</option>
       <option value="crown">On crown-jewel hosts</option>
+      <option value="kev">Exploited in the wild (CISA KEV)</option>
     </select>
     <div class="toggle">
       <button [class.active]="view() === 'open'" (click)="onViewChange('open')">Open</button>
@@ -137,6 +138,11 @@
               <p class="meta muted">
                 @if (finding.overdue) {
                   <span class="badge tone-danger overdue">Overdue</span>
+                }
+                @if (finding.known_exploited) {
+                  <span class="badge tone-danger overdue" [title]="finding.known_exploited.cve + ' is in CISA\'s catalogue of vulnerabilities attackers are exploiting'">
+                    Exploited in the wild
+                  </span>
                 }
                 @if (finding.reopened_count > 0) {
                   <span class="badge tone-serious overdue" title="It was fixed, then a scan found it again">

@@ -23,6 +23,7 @@ const PLAN: FixPlan = {
       hosts: 1,
       crown_jewels: 0,
       overdue: 1,
+      known_exploited: 0,
       items: [{ finding: 'f1', asset: 'a1', asset_value: 'db.acme.com', title: 'Database dump', severity: 'critical' }],
       score_after: 84,
       grade_after: 'B',
@@ -36,6 +37,7 @@ const PLAN: FixPlan = {
       hosts: 3,
       crown_jewels: 1,
       overdue: 0,
+      known_exploited: 0,
       items: [
         { finding: 'f2', asset: 'a2', asset_value: 'pay.acme.com', title: 'Missing HSTS', severity: 'medium' },
         { finding: 'f3', asset: 'a3', asset_value: 'www.acme.com', title: 'Missing HSTS', severity: 'medium' },

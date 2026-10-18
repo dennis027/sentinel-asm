@@ -19,6 +19,9 @@
           @if (f.overdue) {
             <span class="badge tone-danger">Overdue</span>
           }
+          @if (f.known_exploited) {
+            <span class="badge tone-danger">Exploited in the wild</span>
+          }
           @if (f.reopened_count > 0) {
             <span class="badge tone-serious" title="It was fixed, then a scan found it again">
               <app-icon name="repeat" [size]="12" /> Came back{{ f.reopened_count > 1 ? ' ×' + f.reopened_count : '' }}
@@ -40,6 +43,20 @@
 
     <div class="layout">
       <div class="main">
+        @if (f.known_exploited; as k) {
+          <div class="panel kev">
+            <p class="panel-title"><app-icon name="findings" [size]="16" /> Attackers are exploiting this right now</p>
+            <p>
+              <a [href]="'https://nvd.nist.gov/vuln/detail/' + k.cve" target="_blank" rel="noopener">{{ k.cve }}</a>
+              ({{ k.name }}) has been in CISA's catalogue of vulnerabilities known to be exploited in the wild since
+              {{ k.date_added | date: 'mediumDate' }}{{ k.ransomware ? ', and ransomware groups are known to use it' : '' }}.
+              Fix it before anything else, whatever its severity.
+            </p>
+            @if (k.required_action) {
+              <p class="muted"><strong>CISA's required action:</strong> {{ k.required_action }}</p>
+            }
+          </div>
+        }
         @if (f.impact) {
           <div class="panel guidance">
             <p class="panel-title">Why it matters</p>

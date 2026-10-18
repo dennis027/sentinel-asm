@@ -7,6 +7,8 @@ import {
   Paginated,
   ScanJob,
   ScanProgress,
+  ScanRun,
+  ScanTrigger,
   TriggerScanRequest,
 } from '../models/models';
 
@@ -21,13 +23,25 @@ export class ScanJobService {
   private readonly base = `${environment.apiBaseUrl}/scan-jobs`;
 
   list(
-    filters: { organization?: string; asset?: string; status?: string; page?: number } = {},
+    filters: { organization?: string; asset?: string; status?: string; page?: number; run_id?: string; trigger?: string } = {},
   ): Observable<Paginated<ScanJob>> {
     let params = new HttpParams();
     for (const [key, value] of Object.entries(filters)) {
       if (value) params = params.set(key, String(value));
     }
     return this.http.get<Paginated<ScanJob>>(this.base + '/', { params });
+  }
+
+  /** Scan history grouped by where it came from, newest first. */
+  runs(
+    organization: string,
+    filters: { trigger?: ScanTrigger | ''; status?: 'running' | 'failed' | ''; page?: number } = {},
+  ): Observable<Paginated<ScanRun>> {
+    let params = new HttpParams().set('organization', organization);
+    for (const [key, value] of Object.entries(filters)) {
+      if (value) params = params.set(key, String(value));
+    }
+    return this.http.get<Paginated<ScanRun>>(`${this.base}/runs/`, { params });
   }
 
   get(id: string): Observable<ScanJob> {

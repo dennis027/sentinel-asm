@@ -1,0 +1,64 @@
+.errors-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); select { width: auto; } }
+.err-search { flex: 1 1 200px; input { width: 100%; } }
+.error-list { padding: 0; overflow: hidden; }
+.error-group + .error-group { border-top: 1px solid var(--color-border); }
+.error-group.open { background: var(--color-row-hover); }
+.error-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 120px;
+  gap: var(--space-3);
+  align-items: center;
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  color: var(--color-text-primary);
+  &:hover { background: var(--color-row-hover); }
+}
+.e-main { display: flex; flex-direction: column; min-width: 0; }
+.e-type { font-weight: 700; color: var(--color-danger); font-size: 13.5px; }
+.e-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.e-meta { font-size: 12px; color: var(--color-text-secondary); }
+.e-count { text-align: right; font-size: 18px; font-weight: 700; small { display: block; font-size: 11px; font-weight: 500; color: var(--color-text-muted); } }
+.e-when { font-size: 12.5px; color: var(--color-text-secondary); text-align: right; }
+.error-detail { padding: 0 var(--space-4) var(--space-4); }
+.stack {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  max-height: 340px;
+  overflow: auto;
+  background: #0b1020;
+  color: #e2e8f0;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.releases {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.rl-label { font-size: 12px; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em; flex: none; }
+.release {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  text-align: left;
+  &:hover { border-color: var(--color-border-strong); }
+  &.active { border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
+  &.bad .rl-meta { color: var(--color-danger); }
+}
+.rl-name { font-size: 13px; }
+.rl-meta { font-size: 11.5px; color: var(--color-text-secondary); }
+
+.bad { color: var(--color-danger); }
+.filter-chip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 var(--space-3); }
