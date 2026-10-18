@@ -179,6 +179,20 @@ is the fictional demo organization (see [Demo data](#demo-data)).
 | `cookie_security` | asset    | Cookies, especially session cookies, missing Secure, HttpOnly or SameSite |
 | `https_enforcement` | asset  | Sites still served over unencrypted HTTP instead of redirecting to HTTPS |
 | `lookalike_domains` | organization | Registered domains imitating yours (typos, look-alike characters, other endings) that could be used for phishing; DNS lookups only |
+| `admin_panels` | asset       | Login pages that should not face the internet: phpMyAdmin, Jenkins, Grafana, Kibana, router and hosting panels |
+| `api_exposure` | asset       | Public OpenAPI/Swagger documents and API consoles, and GraphQL servers that describe their whole schema to anyone |
+| `dns_hygiene` | organization | No CAA record (any CA may issue for you), no DNSSEC, wildcard DNS, a single nameserver |
+| `cert_transparency` | organization | Every certificate issued for your domain, from the public CT logs: hostnames nobody listed, and certificates from an issuer you don't normally use |
+| `js_secrets`  | asset        | API keys, tokens and private keys left in the JavaScript a site sends to every visitor (Stripe, AWS, GitHub, Slack, SendGrid, OpenAI...); shown masked, never stored in full |
+| `cloud_storage` | organization | Amazon S3 and Google Cloud Storage buckets named after your company (`acme-backups`, `acme-assets`...) whose contents anyone can list; reads the listing only |
+| `domain_expiry` | organization | The domain's registration expiring (45, 30 and 7 days ahead) or not locked against transfer, from the registry's public RDAP service |
+
+Every finding that names a CVE is checked against CISA's **Known Exploited
+Vulnerabilities** catalogue (synced daily, `python manage.py sync_kev` by
+hand, `--file` for an offline copy). A match is badged **Exploited in the
+wild**, can be filtered on, and goes to the top of the fix plan whatever
+its severity: a high that attackers are using today beats a critical that
+nobody is.
 
 Beyond the raw findings, the platform is built to answer the questions
 people actually ask about their security:
@@ -186,6 +200,7 @@ people actually ask about their security:
 | Question | Where it's answered |
 |---|---|
 | What do we have online? | **Assets** and the **Attack surface** map; hosts discovery can't see can be added by hand |
+| Is anyone actually exploiting what we have? | Issues whose CVE is in **CISA's Known Exploited Vulnerabilities** list are badged **Exploited in the wild** and lead the fix plan |
 | What's wrong, and what first? | **Findings**, most severe first, each with why it matters and what to do; the **Fix plan** turns them into a to-do list ranked by urgency and business importance, with the grade each step gets you |
 | Are we getting better? | The dashboard's **90-day risk trend** and plain-English **In short** summary |
 | What changed this week? | **What changed**: new hosts, new issues, issues resolved |
@@ -198,6 +213,7 @@ people actually ask about their security:
 | Does this help with audits? | **Compliance**: issues mapped to OWASP Top 10, CIS Controls v8, ISO/IEC 27001:2022, PCI DSS v4.0 and MITRE ATT&CK (indicative, not an assessment) |
 | What are we not allowed to test? | A **never-scan list**: hosts someone else runs are kept in the inventory but never scanned |
 | We accepted a risk. Until when? | Risk acceptances can have an **end date**; the issue reopens by itself on that day |
+| Why is our app failing, and is someone attacking it? | **Logs → Errors**: each distinct error of a Python or Node.js app once, with its count and stack trace; spikes of errors or 5xx, attack probes and password guessing against the app's login are flagged |
 | Who did what? | The **Activity** log, and each finding's own history |
 | How do people who never log in stay informed? | **Alerts & reports**: an email or chat message (Slack, Teams) when a scan finds something new, set up in three plain questions with a test send; a **weekly PDF report** every Monday; **Download report**; and **Copy as ticket** for Jira or GitHub |
 
@@ -316,6 +332,150 @@ Every role includes the ones above it.
 
 Users only ever see organizations they are a member of. Superusers see
 everything.
+
+## Logs: servers and applications
+
+Besides what the organization exposes, Densight can watch what happens **on** its servers and **in** its
+applications. *Logs → Connect a server or app* gives copy-paste setup steps with the source's own key
+filled in, and turns green when the first logs arrive.
+
+### Servers
+
+Each server (Ubuntu or other Linux, and Windows) sends its logs with [Fluent Bit](https://fluentbit.io), a
+free and widely used log shipper.
+
+- **Linux:** the system journal (SSH, sudo, `useradd`/`usermod`, PAM...).
+- **Windows:** the Security and System event logs (sign-ins, account and group changes, cleared logs,
+  new services).
+
+Every event is sorted into sign-ins, failed sign-ins, admin rights, account changes, cleared logs and
+services, with the user and source address pulled out, so one search works across both systems.
+
+### Applications (Python, Node.js, PHP, Ruby, Go, Java, .NET, anything that posts JSON)
+
+Each app sends its own log records, so errors arrive with their stack traces. Two small client files, no
+dependencies, are served by Densight itself:
+
+```python
+# Python 3.8+: curl -fsSLo densight_logging.py https://densight.example.com/api/logs/clients/densight_logging.py
+import logging, os
+from densight_logging import DensightHandler
+
+logging.getLogger().addHandler(DensightHandler(
+    url="https://densight.example.com/api/ingest/", key=os.environ["DENSIGHT_KEY"], service="shop-api"))
+```
+
+For Django, put the same handler in `LOGGING` (`"class": "densight_logging.DensightHandler"`). It sends in
+batches from a background thread, so logging never slows a request, and a Densight outage never breaks the
+app. Python's own `logging.handlers.HTTPHandler` also works (key as the password of Basic auth).
+
+```js
+// Node 18+: curl -fsSLo densight-logger.js https://densight.example.com/api/logs/clients/densight-logger.js
+const pino = require('pino');
+const { createDensight } = require('./densight-logger');
+
+const densight = createDensight({ url: 'https://densight.example.com/api/ingest/', key: process.env.DENSIGHT_KEY, service: 'payments' });
+const logger = pino({}, pino.multistream([{ stream: process.stdout }, { stream: densight.stream }]));
+// winston: transports: [new (densight.WinstonTransport())()]
+```
+
+Densight reads pino, winston, bunyan, structlog and plain `logging` records: the level (pino's numbers
+too), the message, the exception and stack trace, and request fields (`method`, `path`, `status`, `ip`,
+`user_agent`, or pino-http's `req`/`res`). With that it:
+
+- **groups errors** like Sentry does: same exception type in the same function of your own code (library
+  frames skipped) is one error, with a count, first and last seen, and its stack trace. Resolve one and it
+  reopens, with an alert, if it happens again;
+- treats a 401/403 on a login path as a **failed sign-in**, so password guessing against the app is caught
+  by the same rules as SSH and RDP;
+- flags **attack probes**: SQL injection, path traversal, XSS, Log4Shell strings, `/.env` and `/.git`
+  requests, and scanners such as sqlmap or nuclei;
+- **masks secrets before storing anything**: passwords, API keys and tokens, `Authorization` headers,
+  AWS/GitHub/Slack/Stripe keys, JWTs, private keys and card numbers (Luhn-checked). The event records what
+  was masked, and a detection tells the team to fix the code that logged it.
+
+### Releases
+
+Send the version or commit running (`release="2.15.0"` on the Python handler, `release` in
+`createDensight`, or the `DENSIGHT_RELEASE` environment variable for both; any `release`/`version` field
+otherwise). Each error then records the release it first appeared in and the latest one it happened in, the
+Errors tab lists recent releases with the errors each introduced, and "new error" and "came back" alerts name
+the release: *"Came back in release 3.8.2; it first appeared in 3.8.1."*
+
+### Your own alerts
+
+*Logs → What we watch for → New alert*: some text to look for (any case), optionally narrowed to one server
+or app, a kind of event and a level, and how many times within how many minutes, for example "`payment
+declined` 20 times within 5 minutes on payments". **Test on the last 24 hours** shows how often it would have
+matched, with examples, before you turn it on. It fires as a detection like the built-in ones and goes to
+your alerts by its severity. Analysts and above manage them; up to 50 per organization.
+
+### More languages
+
+*Logs → Connect a server or app* has copy-paste steps for each, with the app's key filled in.
+
+| Language | How it sends | What it understands |
+|---|---|---|
+| Python | `densight_logging.py` (stdlib `logging` handler, Django `LOGGING`) | exceptions and stack traces, `extra` fields; survives fork (Celery, gunicorn) |
+| Node.js | `densight-logger.js` (pino stream, winston transport) | `err` with stack, pino-http `req`/`res` |
+| PHP | `DensightHandler.php`, a Monolog 2/3 handler (Laravel, Symfony) | exceptions with their trace, the request's method, path, address and user agent |
+| Ruby | `densight_logger.rb`, a `::Logger` (Rails, Sinatra, Sidekiq) + Rails error subscriber | exceptions with backtrace, keyword fields, tagged logging; survives fork (Puma, Unicorn) |
+| Go | `densight.go`, a `log/slog` handler + HTTP middleware | error types, call stacks at error level, every request, recovered panics |
+| Java / Kotlin | Logback JSON (logstash-logback-encoder) or Log4j2 JSON/ECS, tailed by Fluent Bit | `stack_trace`, `level_value`, `logger_name` |
+| .NET | Serilog compact JSON (`CompactJsonFormatter`), tailed by Fluent Bit | `@t`/`@l`/`@mt`/`@x`, request logging (`RequestPath`, `StatusCode`) |
+
+Errors are grouped by the exception type and the function in your own code where it happened: library frames
+(`site-packages`, `node_modules`, `vendor/`, `java.*`/`org.springframework.*`, `System.*`/`Microsoft.*`, gems,
+the Go standard library) are skipped, so an error thrown inside a framework is still filed under the line of
+your code that called it. Also understood when sent by other means: zap and logrus JSON, Monolog's own
+`JsonFormatter`, .NET's JSON console logger, Serilog's HTTP sink, bunyan, structlog, GELF and ECS.
+
+### Search, filters and live updates
+
+The **Search events** tab filters by source, kind of event, level (or "warnings and errors"), HTTP status,
+service, release, host, user, address and time (preset ranges or a custom one), with a count beside every
+option. Typing `level:error service:payments status:5xx release:3.8.2 gateway` in the search box sets those
+filters and searches the rest of the text. Each filter is in the page address, so a view can be bookmarked or
+sent to a colleague; active filters show as chips that remove with one click. Above the results, a timeline
+shows matching events over time (errors red, warnings amber); click a bar to zoom into it. **Export CSV**
+downloads the matching events (up to 50,000).
+
+Nothing on the Logs page needs reloading: new events appear at the top of the search within about three
+seconds (highlighted as they arrive; **Live** pauses it), and the counts, detections, errors and sources
+refresh every 15 seconds. It only asks for what is new since the last update, and stops while the browser tab
+is hidden.
+
+### Any other shipper
+
+Post JSON to `POST /api/ingest/` with `Authorization: Bearer dsl_...` (or `X-Densight-Key`): an array of
+records, one record, or one per line (gzip allowed). A record looks like
+`{"timestamp": "...", "host": "web-01", "service": "myapp", "message": "...", "level": "error"}`; add
+`error: {type, message, stack}` for exceptions and `method`, `path`, `status`, `ip` for requests.
+
+### Detections
+
+New ones go to your alerts by severity.
+
+| Detection | Severity |
+|---|---|
+| Sign-in that worked after 5+ failures from the same address | critical |
+| Security log cleared, or log files deleted | critical |
+| 10+ failed sign-ins (SSH, RDP, Windows, app login) from one address in 10 minutes | high |
+| One address failing against 5+ different accounts | high |
+| Direct SSH sign-in as root | high |
+| Account added to sudo, wheel or Administrators | high |
+| A secret, password or key written to an app's logs | high |
+| 25+ server errors (5xx) from an app in 5 minutes | high |
+| 50+ app errors in 5 minutes | high |
+| A new kind of app error; a resolved error that came back; 5+ attack probes from one address | medium |
+| New account; blocked sudo attempt; new service or scheduled task; account lockout | medium |
+| A server or app stops sending logs (60 minutes by default) | medium |
+| Your own alerts | the severity you choose |
+
+Logs are kept 30 days by default (7 to 365, set per organization on the Sources tab) and deleted nightly;
+detections and error groups are kept. Set `ASM_LOG_INGEST_URL` to the address servers and apps can reach.
+Events are stored in Postgres, which suits tens of servers and apps; for much larger volumes a dedicated
+log store would be the next step.
 
 ## Account security and integrations
 
