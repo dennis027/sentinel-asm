@@ -17,6 +17,9 @@ from apps.scanning.plugins.http_util import Page
 from apps.scanning.plugins.js_secrets import JsSecretsScanner, find_secrets, mask, script_urls
 
 STRIPE = "sk_live_" + "4eC39HqLyjWDarjtT1zdp7dc9xA"
+# A made-up Google-key-shaped sample, built from pieces so code scanners
+# (GitHub secret scanning) don't mistake the test file for a leak.
+GOOGLE = "AIza" + "SyD-" + "9tSrke72PouQMnMX-a7eZSW0jkFMBWY"
 GITHUB = "ghp_" + "A" * 4 + "b1C2d3E4f5G6h7I8j9K0l1M2n3O4p5Q6r7S8"
 
 
@@ -24,7 +27,7 @@ class JsSecretsTests(SimpleTestCase):
     def test_finds_server_side_keys_and_ignores_public_ones_and_placeholders(self):
         code = (f'const stripe = "{STRIPE}"; const pk = "pk_live_51Habc123def456ghi789jkl";'
                 f' fetch("/x", {{headers: {{t: "{GITHUB}"}}}}); const demo = "AKIAIOSFODNN7EXAMPLE";'
-                ' const maps = "REMOVED_SAMPLE_KEY";')
+                f' const maps = "{GOOGLE}";')
         found = {kind.kind: value for kind, value in find_secrets(code)}
         self.assertEqual(set(found), {"stripe_secret", "github_token", "google_api_key"})
         self.assertEqual(mask(STRIPE), "sk_liv…c9xA")
