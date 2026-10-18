@@ -16,6 +16,7 @@ from django.utils import timezone
 from apps.assets.models import Asset, Technology
 
 from .guidance import guidance_for
+from .kev import index as kev_index
 from .models import Finding
 from .remediation import is_overdue
 from .risk_scoring import GRADE_CAPS, calculate_risk_score, grade_for_score
@@ -102,6 +103,7 @@ def build_fix_plan(organization) -> dict:
         .select_related("asset")
     )
     sla = organization.sla_policy
+    kev = kev_index()
     per_asset: dict = defaultdict(list)
     groups: dict = defaultdict(list)
     for finding in findings:
@@ -125,6 +127,8 @@ def build_fix_plan(organization) -> dict:
             "hosts": len(hosts),
             "crown_jewels": sum(1 for a in hosts.values() if a.criticality == Asset.Criticality.CROWN_JEWEL),
             "overdue": sum(1 for f in members if is_overdue(f, sla=sla)),
+            # Attackers are known to exploit at least one of these CVEs.
+            "known_exploited": sum(1 for f in members if any(cve in kev for cve in f.cves)),
             "items": [
                 {
                     "finding": f.id, "asset": f.asset_id, "asset_value": f.asset.value,
@@ -135,8 +139,10 @@ def build_fix_plan(organization) -> dict:
             "_ids": {f.id for f in members},
         })
 
+    # Known-exploited first (CISA KEV), then worst severity, then crown jewels, then the widest fix.
     plan.sort(key=lambda step: (
-        -SEVERITY_RANK[step["severity"]], -min(step["crown_jewels"], 1), -step["issues"], step["action"],
+        -min(step["known_exploited"], 1), -SEVERITY_RANK[step["severity"]], -min(step["crown_jewels"], 1),
+        -step["issues"], step["action"],
     ))
 
     at_risk = len(per_asset)
