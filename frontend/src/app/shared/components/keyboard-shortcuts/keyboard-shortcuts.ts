@@ -12,6 +12,7 @@ const JUMPS: { key: string; path: string; label: string }[] = [
   { key: 'i', path: '/inventory', label: 'Inventory' },
   { key: 'c', path: '/compliance', label: 'Compliance' },
   { key: 's', path: '/scanners', label: 'Scanners' },
+  { key: 'l', path: '/logs', label: 'Logs' },
   { key: 'b', path: '/board', label: 'Board view' },
 ];
 const PREFIX_WINDOW_MS = 1000;

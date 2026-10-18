@@ -34,6 +34,8 @@ const ICONS = {
     '<path d="M9.5 14.5 7 17a3.5 3.5 0 0 1-5-5l2.5-2.5M14.5 9.5 17 7a3.5 3.5 0 0 1 5 5l-2.5 2.5M8 3v2.5M3 8h2.5M16 21v-2.5M21 16h-2.5"/>',
   key: '<circle cx="8" cy="15" r="4.5"/><path d="m11.5 11.5 8.5-8.5M17 6l3 3M14 9l2 2"/>',
   package: '<path d="M12 2.5 3.5 7v10l8.5 4.5 8.5-4.5V7L12 2.5Z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/>',
+  code: '<path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/>',
+  cloud: '<path d="M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.5 9 4.75 4.75 0 0 0 7 18.5Z"/>',
   file: '<path d="M6 2.5h8l4.5 4.5v14.5H6V2.5Z"/><path d="M14 2.5V7h4.5M9 12h6M9 16h6"/>',
 
   'file-alert': '<path d="M6 2.5h8l4.5 4.5v14.5H6V2.5Z"/><path d="M14 2.5V7h4.5M12 11v4M12 18h.01"/>',
@@ -50,6 +52,7 @@ const ICONS = {
   play: '<path d="M7 4.500v15l12-7.500L7 4.500Z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   download: '<path d="M12 3v12M7 10.500l5 5 5-5M4 20h16"/>',
+  filter: '<path d="M3 5h18l-7 8.5V19l-4 2v-7.5L3 5Z"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
   check: '<path d="m5 12.5 4.5 4.500L19 7.5"/>',
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
@@ -127,6 +130,13 @@ const SCANNER_ICONS: Record<string, IconName> = {
   cookie_security: 'cookie',
   https_enforcement: 'lock-open',
   lookalike_domains: 'eye-off',
+  admin_panels: 'monitor',
+  api_exposure: 'layers',
+  dns_hygiene: 'network',
+  cert_transparency: 'search',
+  js_secrets: 'code',
+  cloud_storage: 'cloud',
+  domain_expiry: 'calendar',
 };
 
 /** The icon for a scanner plugin; new plugins get the generic one. */

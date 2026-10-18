@@ -40,6 +40,8 @@ const PAGES: { label: string; path: string; icon: IconName; words: string }[] = 
   { label: 'Certificates', path: '/inventory?tab=certificates', icon: 'lock', words: 'tls ssl expiry expiring' },
   { label: 'Overdue findings', path: '/findings?overdue=1', icon: 'history', words: 'late sla past due fix' },
   { label: 'Issues that came back', path: '/findings?regressed=1', icon: 'repeat', words: 'regressed reopened again' },
+  { label: 'Logs', path: '/logs', icon: 'server', words: 'siem events linux ubuntu windows ssh rdp brute force sign-ins detections python node django express errors exceptions stack trace apps' },
+  { label: 'Connect a server', path: '/logs?tab=servers', icon: 'plus', words: 'fluent bit agent ship logs linux windows' },
   { label: 'Screenshots', path: '/screenshots', icon: 'camera', words: 'gallery pictures sites' },
   { label: 'Scanners', path: '/scanners', icon: 'scanners', words: 'scan run start' },
   { label: 'Scan history', path: '/scan-history', icon: 'history', words: 'jobs runs' },

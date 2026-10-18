@@ -26,6 +26,7 @@ export function makeOrganization(overrides: Partial<Organization> = {}): Organiz
     scans_allowed: true,
     sla_days: { critical: 7, high: 30, medium: 90, low: 180 },
     scope_exclusions: [],
+    log_retention_days: 30,
     ...overrides,
   };
 }
@@ -80,6 +81,8 @@ export function makeFinding(overrides: Partial<Finding> = {}): Finding {
     reopened_count: 0,
     reopened_at: null,
     asset_criticality: 'normal',
+    cves: [],
+    known_exploited: null,
     ...overrides,
   };
 }
