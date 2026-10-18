@@ -1,17 +1,18 @@
-# Densight on Render: Blueprint (Render dashboard → New → Blueprint → this repo).
+# Densight on Render: a free demo. Render dashboard → New → Blueprint → this repo.
 #
-#   densight          Static Site: the Angular app. Forwards /api, /admin, /static
-#                     and /health to the API, so the browser only talks to one address.
-#   densight-api      Web Service: Django + gunicorn. Runs migrations before each deploy.
-#   densight-worker   Background Worker: Celery, runs the scans (nmap, nuclei, Chromium).
-#   densight-beat     Background Worker: Celery beat, the daily scans and cleanups.
-#   densight-redis    Key Value: the task queue between them.
+#   densight         Static Site: the Angular app. Forwards /api, /admin, /static and
+#                    /health to the API, so the browser only talks to one address.
+#   densight-api     Web Service (free): the API, the scan worker and the daily schedule
+#                    in one container (backend/start-demo.sh).
+#   densight-redis   Key Value (free): the task queue.
 #
-# The database is Neon (DATABASE_URL), screenshots go to Cloudflare R2 or S3
-# (the S3_* settings): Render services can't share a disk.
+# Free means: the API sleeps after 15 minutes without visitors (about a minute to wake),
+# 512 MB of memory (heavy scans such as nuclei and screenshots may not fit), and the
+# container's disk is wiped on restart. The admin user and the demo company are created
+# at startup. For a real deployment use render.production.yaml.
 #
-# Values marked sync: false are asked for when the Blueprint is created; fill them
-# from .env.production.example. Ohio is next to Neon's us-east-2.
+# The database is Neon (DATABASE_URL). Values marked sync: false are asked for when
+# the Blueprint is created.
 
 services:
   - type: web
@@ -59,82 +60,31 @@ services:
   - type: web
     name: densight-api
     runtime: docker
-    plan: starter
+    plan: free
     region: ohio
-    dockerfilePath: ./backend/Dockerfile.api
-    dockerContext: ./backend
-    # Render tells the service which port to listen on in $PORT.
-    dockerCommand: >-
-      sh -c "python manage.py collectstatic --noinput &&
-      gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --timeout 60 --access-logfile -"
-    preDeployCommand: python manage.py migrate --noinput && python manage.py setup_periodic_tasks
-    healthCheckPath: /health/
-    envVars:
-      - fromGroup: densight
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: densight-redis
-          property: connectionString
-
-  - type: worker
-    name: densight-worker
-    runtime: docker
-    # Headless Chromium (screenshots) and nuclei need the memory.
-    plan: standard
-    region: ohio
+    # The worker image: it has the scanners (nmap, nuclei, subfinder, Chromium).
     dockerfilePath: ./backend/Dockerfile.worker
     dockerContext: ./backend
-    dockerCommand: celery -A config worker --loglevel=info --concurrency=2
+    dockerCommand: ./start-demo.sh
+    healthCheckPath: /health/
     envVars:
-      - fromGroup: densight
       - key: REDIS_URL
         fromService:
           type: keyvalue
           name: densight-redis
           property: connectionString
-
-  - type: worker
-    name: densight-beat
-    runtime: docker
-    plan: starter
-    region: ohio
-    dockerfilePath: ./backend/Dockerfile.api
-    dockerContext: ./backend
-    dockerCommand: celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
-    envVars:
-      - fromGroup: densight
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: densight-redis
-          property: connectionString
-
-  - type: keyvalue
-    name: densight-redis
-    plan: starter
-    region: ohio
-    # Only these services can reach it.
-    ipAllowList: []
-    # A task queue must never silently drop queued scans when memory is full.
-    maxmemoryPolicy: noeviction
-
-envVarGroups:
-  - name: densight
-    envVars:
       - key: DJANGO_SECRET_KEY
         generateValue: true
       - key: DJANGO_DEBUG
         value: "False"
       - key: DJANGO_HTTPS
         value: "True"
-      # Render's proxy sits in front of the API.
       - key: NUM_PROXIES
         value: "1"
-      # The site's address, e.g. densight.onrender.com (and your own domain, comma-separated).
+      # The site's address, e.g. densight.onrender.com,densight-api.onrender.com
       - key: DJANGO_ALLOWED_HOSTS
         sync: false
-      # The same with https://, e.g. https://densight.onrender.com
+      # e.g. https://densight.onrender.com
       - key: CSRF_TRUSTED_ORIGINS
         sync: false
       - key: CORS_ALLOWED_ORIGINS
@@ -142,25 +92,23 @@ envVarGroups:
       # Neon, the pooled connection string.
       - key: DATABASE_URL
         sync: false
-      # Cloudflare R2 (or S3) for screenshots.
-      - key: S3_BUCKET
+      # The first user, created at startup.
+      - key: DJANGO_SUPERUSER_USERNAME
         sync: false
-      - key: S3_ENDPOINT_URL
+      - key: DJANGO_SUPERUSER_EMAIL
         sync: false
-      - key: S3_ACCESS_KEY_ID
+      - key: DJANGO_SUPERUSER_PASSWORD
         sync: false
-      - key: S3_SECRET_ACCESS_KEY
-        sync: false
-      - key: S3_REGION
-        value: auto
-      # Where servers and apps send logs, e.g. https://densight.onrender.com/api/ingest/
+      # Load the Acme Retail demo company for that user.
+      - key: DEMO_DATA
+        value: "true"
       - key: ASM_LOG_INGEST_URL
         sync: false
-      - key: DEFAULT_FROM_EMAIL
-        sync: false
-      - key: EMAIL_HOST
-        sync: false
-      - key: EMAIL_HOST_USER
-        sync: false
-      - key: EMAIL_HOST_PASSWORD
-        sync: false
+
+  - type: keyvalue
+    name: densight-redis
+    plan: free
+    region: ohio
+    ipAllowList: []
+    # A task queue must never silently drop queued scans when memory is full.
+    maxmemoryPolicy: noeviction
