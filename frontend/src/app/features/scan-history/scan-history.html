@@ -2,16 +2,36 @@
   <div class="header">
     <div>
       <h1>Scan history</h1>
-      <p class="muted">Every scan run for this organization. Updates by itself while scans are in progress.</p>
+      <p class="muted">Every scan, grouped by where it came from. Updates by itself while scans are in progress.</p>
     </div>
-    <select aria-label="Filter by status" [ngModel]="statusFilter()" (ngModelChange)="onStatusChange($event)">
-      <option value="">All statuses</option>
-      <option value="success">Success</option>
-      <option value="failed">Failed</option>
-      <option value="running">Running</option>
-      <option value="retrying">Retrying</option>
-      <option value="pending">Pending</option>
-    </select>
+    <div class="toggle" role="group" aria-label="How to show scans">
+      <button [class.active]="view() === 'runs'" (click)="setView('runs')">By where they came from</button>
+      <button [class.active]="view() === 'jobs'" (click)="setView('jobs')">Every scan</button>
+    </div>
+  </div>
+
+  <div class="controls-row">
+    <div class="origins" role="group" aria-label="Where scans came from">
+      @for (o of origins; track o.value) {
+        <button class="origin" [class.active]="origin() === o.value" (click)="setOrigin(o.value)">{{ o.label }}</button>
+      }
+    </div>
+    @if (view() === 'runs') {
+      <select aria-label="Filter runs" [ngModel]="runStatus()" (ngModelChange)="onRunStatusChange($event)">
+        <option value="">Any outcome</option>
+        <option value="running">Still running</option>
+        <option value="failed">Had failures</option>
+      </select>
+    } @else {
+      <select aria-label="Filter by status" [ngModel]="statusFilter()" (ngModelChange)="onStatusChange($event)">
+        <option value="">All statuses</option>
+        <option value="success">Success</option>
+        <option value="failed">Failed</option>
+        <option value="running">Running</option>
+        <option value="retrying">Retrying</option>
+        <option value="pending">Pending</option>
+      </select>
+    }
   </div>
 
   @if (errorMessage()) {
@@ -20,54 +40,108 @@
 
   @if (isLoading()) {
     <p class="loading">Loading…</p>
-  } @else if (jobs().length === 0) {
-    @if (statusFilter()) {
-      <app-empty-state art="search" title="No scans with this status" />
+  } @else if (view() === 'runs') {
+    @if (runs().length === 0) {
+      @if (origin() || runStatus()) {
+        <app-empty-state art="search" title="No scans like this" />
+      } @else {
+        <app-empty-state art="radar" title="No scans yet">
+          Start one from the <a routerLink="/scanners">Scanners</a> page; everything is also scanned once a day.
+        </app-empty-state>
+      }
     } @else {
-      <app-empty-state art="radar" title="No scans yet">
-        Start one from the <a routerLink="/scanners">Scanners</a> page.
-      </app-empty-state>
-    }
-  } @else {
-    <table>
-      <thead>
-        <tr>
-          <th>Scanner</th>
-          <th>Target</th>
-          <th>Status</th>
-          <th>Started</th>
-          <th>Finished</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (job of jobs(); track job.id) {
-          <tr>
-            <td>{{ labelFor(job) }}</td>
-            <td class="muted">{{ job.asset_value ?? job.organization_name }}</td>
-            <td>
-              <span class="badge status-{{ job.status }}">{{ job.status }}</span>
-              @if (job.status === 'failed' && job.error_message) {
-                <p class="error-detail">{{ job.error_message }}</p>
-              }
-            </td>
-            <td class="muted">{{ job.started_at ? (job.started_at | date: 'MMM d, h:mm a') : '—' }}</td>
-            <td class="muted">{{ job.finished_at ? (job.finished_at | date: 'MMM d, h:mm a') : '—' }}</td>
-            <td>
-              @if (orgContext.canTriggerScans()) {
-                <button
-                  class="btn secondary small"
-                  [disabled]="rerunningJobId() === job.id"
-                  (click)="rerun(job)"
-                >
-                  {{ rerunningJobId() === job.id ? 'Starting…' : 'Re-run' }}
-                </button>
-              }
-            </td>
-          </tr>
+      <ul class="runs">
+        @for (run of runs(); track run.run_id) {
+          <li class="panel run" [class.open]="openRun() === run.run_id" [class.busy]="run.unfinished > 0">
+            <button class="run-head" (click)="toggleRun(run)" [attr.aria-expanded]="openRun() === run.run_id">
+              <span class="origin-icon origin-{{ run.trigger }}"><app-icon [name]="iconFor(run)" [size]="18" /></span>
+              <span class="run-main">
+                <span class="run-title">{{ titleFor(run) }}</span>
+                <span class="run-origin">{{ originFor(run) }}</span>
+                <span class="run-meta">
+                  {{ run.started | date: 'EEE MMM d, HH:mm' }} · {{ coverage(run) }}
+                  @if (duration(run)) { · {{ duration(run) }} }
+                </span>
+              </span>
+              <span class="run-numbers">
+                <span class="bar" aria-hidden="true">
+                  <span class="ok" [style.width.%]="percent(run, run.succeeded)"></span>
+                  <span class="bad" [style.width.%]="percent(run, run.failed)"></span>
+                  <span class="wait" [style.width.%]="percent(run, run.unfinished)"></span>
+                </span>
+                <span class="counts">
+                  @if (run.unfinished) {
+                    <strong class="running">{{ run.jobs - run.unfinished | number }} of {{ run.jobs | number }} done</strong>
+                  } @else {
+                    {{ run.jobs | number }} {{ run.jobs === 1 ? 'scan' : 'scans' }}
+                  }
+                  @if (run.failed) { · <span class="failed">{{ run.failed | number }} failed</span> }
+                  @if (run.new_findings) { · <span class="found">{{ run.new_findings | number }} new {{ run.new_findings === 1 ? 'issue' : 'issues' }}</span> }
+                </span>
+              </span>
+              <app-icon class="chev" name="chevron" [size]="16" />
+            </button>
+            @if (openRun() === run.run_id) {
+              <div class="run-jobs">
+                <ng-container *ngTemplateOutlet="jobTable; context: { $implicit: runJobs(), origin: false }" />
+                @if (runJobCount() > 50) {
+                  <app-pager [page]="runJobPage()" [count]="runJobCount()" (pageChange)="onRunJobPage($event)" />
+                }
+              </div>
+            }
+          </li>
         }
-      </tbody>
-    </table>
+      </ul>
+      <app-pager [page]="page()" [count]="runCount()" (pageChange)="onPageChange($event)" />
+    }
+  } @else if (jobs().length === 0) {
+    <app-empty-state art="search" title="No scans like this" />
+  } @else {
+    <ng-container *ngTemplateOutlet="jobTable; context: { $implicit: jobs(), origin: true }" />
     <app-pager [page]="page()" [count]="totalCount()" (pageChange)="onPageChange($event)" />
   }
 </div>
+
+<ng-template #jobTable let-list let-origin="origin">
+  <table>
+    <thead>
+      <tr>
+        <th>Scanner</th>
+        <th>Target</th>
+        @if (origin) {
+          <th>From</th>
+        }
+        <th>Status</th>
+        <th>Started</th>
+        <th>Finished</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (job of list; track job.id) {
+        <tr>
+          <td>{{ labelFor(job) }}</td>
+          <td class="muted">{{ job.asset_value ?? job.organization_name }}</td>
+          @if (origin) {
+            <td class="muted">{{ job.trigger_label }}{{ job.triggered_by ? ' · ' + job.triggered_by : '' }}</td>
+          }
+          <td>
+            <span class="badge status-{{ job.status }}">{{ job.status }}</span>
+            @if (job.status === 'failed' && job.error_message) {
+              <p class="error-detail">{{ job.error_message }}</p>
+            }
+          </td>
+          <td class="muted">{{ job.started_at ? (job.started_at | date: 'MMM d, h:mm a') : '—' }}</td>
+          <td class="muted">{{ job.finished_at ? (job.finished_at | date: 'MMM d, h:mm a') : '—' }}</td>
+          <td>
+            @if (orgContext.canTriggerScans()) {
+              <button class="btn secondary small" [disabled]="rerunningJobId() === job.id" (click)="rerun(job)">
+                {{ rerunningJobId() === job.id ? 'Starting…' : 'Re-run' }}
+              </button>
+            }
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</ng-template>

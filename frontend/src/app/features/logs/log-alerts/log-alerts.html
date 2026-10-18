@@ -1,0 +1,142 @@
+<section class="own">
+  <div class="own-head">
+    <div>
+      <h2>Your own alerts</h2>
+      <p class="muted">
+        Be told when something specific to you happens: a message your app logs, a kind of event on one server, more
+        than a set number of times.
+      </p>
+    </div>
+    @if (canEdit() && editing() === null) {
+      <button class="btn" (click)="start()"><app-icon name="plus" [size]="14" /> New alert</button>
+    }
+  </div>
+
+  @if (editing() !== null) {
+    <form class="panel alert-form" (ngSubmit)="save()">
+      <p class="panel-title">{{ editing() ? 'Change alert' : 'New alert' }}</p>
+      <div class="grid">
+        <div class="wide">
+          <label for="alert-name">Name</label>
+          <input id="alert-name" name="name" maxlength="120" placeholder="Payments failing"
+                 [ngModel]="draft().name" (ngModelChange)="update('name', $event)" />
+        </div>
+        <div class="wide">
+          <label for="alert-contains">Look for this text <span class="muted">(any case, anywhere in the message)</span></label>
+          <input id="alert-contains" name="contains" maxlength="200" placeholder="payment declined"
+                 [ngModel]="draft().contains" (ngModelChange)="update('contains', $event)" />
+        </div>
+        <div>
+          <label for="alert-source">On</label>
+          <select id="alert-source" name="source" [ngModel]="draft().source" (ngModelChange)="update('source', $event)">
+            <option [ngValue]="null">Any server or app</option>
+            @for (s of sources(); track s.id) {
+              <option [ngValue]="s.id">{{ s.name }}</option>
+            }
+          </select>
+        </div>
+        <div>
+          <label for="alert-category">Kind of event</label>
+          <select id="alert-category" name="category" [ngModel]="draft().category" (ngModelChange)="update('category', $event)">
+            <option value="">Any kind</option>
+            @for (c of categories; track c.value) {
+              <option [value]="c.value">{{ c.label }}</option>
+            }
+          </select>
+        </div>
+        <div>
+          <label for="alert-level">Level</label>
+          <select id="alert-level" name="level" [ngModel]="draft().level" (ngModelChange)="update('level', $event)">
+            <option value="">Any level</option>
+            <option value="warning">Warnings and errors</option>
+            <option value="error">Errors only</option>
+          </select>
+        </div>
+        <div>
+          <label for="alert-severity">Severity</label>
+          <select id="alert-severity" name="severity" [ngModel]="draft().severity" (ngModelChange)="update('severity', $event)">
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+        </div>
+        <div class="wide count">
+          <label for="alert-threshold">When it appears</label>
+          <div class="inline">
+            <input id="alert-threshold" name="threshold" type="number" min="1" max="100000"
+                   [ngModel]="draft().threshold" (ngModelChange)="update('threshold', $event)" />
+            <span>times within</span>
+            <input id="alert-window" name="window" type="number" min="1" max="1440" aria-label="Minutes"
+                   [ngModel]="draft().window_minutes" (ngModelChange)="update('window_minutes', $event)" />
+            <span>minutes</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="sentence"><app-icon name="bell" [size]="14" /> {{ sentence() }}</p>
+
+      @if (preview(); as p) {
+        <div class="preview" [class.none]="p.matches_24h === 0">
+          <p>
+            <strong>{{ p.matches_24h | number }}</strong> matching
+            {{ p.matches_24h === 1 ? 'event' : 'events' }} in the last 24 hours{{ p.matches_24h ? ', for example:' : '.' }}
+          </p>
+          @for (e of p.examples; track e.id) {
+            <code>{{ e.occurred_at | date: 'MMM d, HH:mm' }} · {{ e.source_name }} · {{ e.message }}</code>
+          }
+        </div>
+      }
+      @if (error()) {
+        <p class="error" role="alert">{{ error() }}</p>
+      }
+      <div class="actions">
+        <button class="btn" type="submit" [disabled]="isSaving()">{{ editing() ? 'Save changes' : 'Turn on alert' }}</button>
+        <button class="btn secondary" type="button" (click)="test()">Test on the last 24 hours</button>
+        <button class="btn secondary" type="button" (click)="cancel()">Cancel</button>
+      </div>
+    </form>
+  }
+
+  @if (rules().length) {
+    <ul class="panel own-list">
+      @for (r of rules(); track r.id) {
+        <li [class.off]="!r.enabled">
+          <span class="badge severity-{{ r.severity }}">{{ r.severity }}</span>
+          <div class="r-body">
+            <p class="r-title">{{ r.name }}</p>
+            <p class="muted">{{ describe(r) }}</p>
+            <p class="r-meta">
+              {{ r.matches_24h | number }} {{ r.matches_24h === 1 ? 'match' : 'matches' }} in 24 h
+              @if (r.last_fired_at) { · last alerted {{ r.last_fired_at | date: 'MMM d, HH:mm' }} }
+              @if (r.created_by) { · by {{ r.created_by }} }
+            </p>
+          </div>
+          @if (canEdit()) {
+            <div class="r-actions">
+              <label class="switch" [title]="r.enabled ? 'On' : 'Off'">
+                <input type="checkbox" [checked]="r.enabled" (change)="toggle(r)" [attr.aria-label]="'Alert ' + r.name + ' on'" />
+                <span class="track"><span class="thumb"></span></span>
+              </label>
+              <button class="btn secondary small" (click)="edit(r)">Edit</button>
+              <button class="icon-btn" (click)="remove(r)" [attr.aria-label]="'Delete ' + r.name"><app-icon name="x" [size]="14" /></button>
+            </div>
+          } @else if (!r.enabled) {
+            <span class="muted small">Off</span>
+          }
+        </li>
+      }
+    </ul>
+  } @else if (loaded() && editing() === null) {
+    <div class="panel ideas">
+      <p class="muted">No alerts of your own yet.{{ canEdit() ? ' Start from one of these:' : '' }}</p>
+      @if (canEdit()) {
+        <div class="idea-row">
+          @for (idea of ideas; track idea.label) {
+            <button class="btn secondary small" (click)="start(idea.draft)">{{ idea.label }}</button>
+          }
+        </div>
+      }
+    </div>
+  }
+</section>
