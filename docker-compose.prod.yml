@@ -3,44 +3,30 @@
 #   - Postgres and Redis are not published to the host at all
 #   - one public entrypoint: nginx (`web`) serves the built Angular app
 #     and proxies /api, /admin and /health to the API
-#   - DEBUG is forced off, so DJANGO_SECRET_KEY must be set in .env and
+#   - DEBUG is forced off, so DJANGO_SECRET_KEY must be set and
 #     organizations must verify their domain before scanning
+#   - the database is hosted (Neon): no Postgres container here. Settings
+#     come from .env.production (see .env.production.example), not .env,
+#     so local development keeps its own database.
 #
 #   docker compose -f docker-compose.prod.yml up --build -d
 #
 # TLS is expected to terminate in front of this (load balancer, Caddy,
-# Cloudflare, ...). When it does, set DJANGO_HTTPS=True in .env.
+# Cloudflare, ...). When it does, set DJANGO_HTTPS=True in .env.production.
 name: asm-platform-prod
 
 x-backend: &backend
   restart: unless-stopped
-  env_file: .env
+  env_file: .env.production
   environment: &backend-env
     DJANGO_DEBUG: "False"
     # nginx (`web`) is the one trusted proxy in front of the API.
     NUM_PROXIES: "1"
   depends_on:
-    db:
-      condition: service_healthy
     redis:
       condition: service_healthy
 
 services:
-  db:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -109,6 +95,5 @@ services:
         condition: service_healthy
 
 volumes:
-  postgres_data:
   static_files:
   media_files:

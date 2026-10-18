@@ -161,7 +161,8 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 
 # ---- Database -----------------------------------------------------------
-# Points at the "db" service name from docker-compose.yml, not localhost.
+# DATABASE_URL in .env: the compose "db" service by default, or a hosted
+# Postgres such as Neon. Credentials only ever live in .env.
 
 DATABASES = {
     "default": env.db(
@@ -169,6 +170,16 @@ DATABASES = {
         default="postgres://asm_user:asm_password@db:5432/asm_platform",
     )
 }
+# Reuse connections for a while (a hosted database is a network round trip
+# away), checking each one is still alive before using it.
+DATABASES["default"]["CONN_MAX_AGE"] = env.int("DATABASE_CONN_MAX_AGE", default=60)
+DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+# Connection poolers in transaction mode (PgBouncer, Neon's "-pooler" address)
+# can't keep a server-side cursor open between transactions; .iterator() then
+# reads in chunks without one. On automatically for those hosts.
+DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = env.bool(
+    "DATABASE_DISABLE_SERVER_SIDE_CURSORS", default="-pooler" in DATABASES["default"].get("HOST", "")
+)
 
 
 # ---- Cache / Celery broker -----------------------------------------------

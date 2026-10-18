@@ -539,14 +539,25 @@ pull request.
 ## Deploying
 
 `docker-compose.prod.yml` is a production-shaped stack: gunicorn, the
-built frontend served by nginx, and only nginx published to the host.
+built frontend served by nginx, and only nginx published to the host. Its
+database is hosted Postgres (Neon), so there is no Postgres container; it reads
+its settings from `.env.production`, not `.env`. Local development
+(`docker-compose.yml`) keeps its own Postgres container and `.env`, so the two
+never share a database.
 
 ```bash
-# in .env: set DJANGO_SECRET_KEY, DJANGO_ALLOWED_HOSTS, strong Postgres
-# credentials, and SMTP settings
+# on the server, next to the code
+cp .env.production.example .env.production
+# fill in: DJANGO_SECRET_KEY, your domain (DJANGO_ALLOWED_HOSTS,
+# CSRF_TRUSTED_ORIGINS, CORS_ALLOWED_ORIGINS, ASM_LOG_INGEST_URL),
+# DATABASE_URL from the Neon console (the pooled connection), SMTP
 docker compose -f docker-compose.prod.yml up --build -d
 docker compose -f docker-compose.prod.yml exec api python manage.py createsuperuser
 ```
+
+Neon's pooled (`-pooler`) address runs PgBouncer in transaction mode; Densight
+detects it and turns off server-side cursors, which that mode can't keep open.
+Set `DATABASE_DISABLE_SERVER_SIDE_CURSORS` to override.
 
 Migrations, static files and the periodic tasks are set up when the
 `api` container starts. Put TLS in front of nginx (a load balancer,
