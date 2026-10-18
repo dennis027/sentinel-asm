@@ -1,7 +1,9 @@
 import hashlib
+import re
 import uuid
 
 from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
 from apps.assets.models import Asset
@@ -69,6 +71,14 @@ class Finding(models.Model):
         INSECURE_COOKIE = "insecure_cookie", "Insecure cookie"
         NO_HTTPS = "https_not_enforced", "HTTPS not enforced"
         LOOKALIKE_DOMAIN = "lookalike_domain", "Lookalike domain"
+        EXPOSED_PANEL = "exposed_panel", "Exposed admin panel"
+        API_EXPOSURE = "api_exposure", "Exposed API documentation"
+        DNS_HYGIENE = "dns_hygiene", "DNS hygiene"
+        CERT_ISSUED = "cert_issued", "Certificate issued"
+        UNUSUAL_CERT = "unusual_certificate", "Unusual certificate"
+        EXPOSED_SECRET = "exposed_secret", "Secret in public code"
+        PUBLIC_BUCKET = "public_bucket", "Public cloud storage"
+        DOMAIN_REGISTRATION = "domain_registration", "Domain registration"
 
     class Severity(models.TextChoices):
         INFO = "info", "Info"
@@ -98,6 +108,7 @@ class Finding(models.Model):
         FindingType.SUBDOMAIN_DISCOVERED,
         FindingType.DNS_CHANGE,
         FindingType.SCREENSHOT,
+        FindingType.CERT_ISSUED,
     )
 
     objects = FindingQuerySet.as_manager()
@@ -155,6 +166,10 @@ class Finding(models.Model):
     # knowing about: the cause wasn't dealt with.
     reopened_count = models.PositiveIntegerField(default=0)
     reopened_at = models.DateTimeField(null=True, blank=True)
+    # CVE ids the finding is about (from the scanner's data and title),
+    # matched against CISA's catalogue of vulnerabilities known to be
+    # exploited in the wild (KnownExploitedVulnerability).
+    cves = ArrayField(models.CharField(max_length=32), blank=True, default=list)
 
     class Meta:
         ordering = ["-last_seen"]
@@ -181,7 +196,18 @@ class Finding(models.Model):
         raw = f"{finding_type}:{identifier}"
         return hashlib.sha256(raw.encode()).hexdigest()
 
+    CVE_PATTERN = re.compile(r"CVE-\d{4}-\d{4,7}", re.IGNORECASE)
+
+    @classmethod
+    def extract_cves(cls, *texts) -> list[str]:
+        found = set()
+        for text in texts:
+            found.update(match.upper() for match in cls.CVE_PATTERN.findall(str(text or "")))
+        return sorted(found)
+
     def save(self, *args, **kwargs):
+        if not self.cves:
+            self.cves = self.extract_cves(self.title, self.raw_data)
         if not self.dedupe_key:
             raise ValueError(
                 "dedupe_key must be set explicitly via Finding.build_dedupe_key() "
@@ -241,3 +267,29 @@ class FindingComment(models.Model):
 
     def __str__(self):
         return f"{self.author_name} on {self.finding_id}: {self.body[:40]}"
+
+
+class KnownExploitedVulnerability(models.Model):
+    """
+    One entry of CISA's Known Exploited Vulnerabilities catalogue: a CVE
+    that attackers are confirmed to be using. Synced daily
+    (apps.findings.kev.sync); a finding about one of these goes to the
+    top of the queue whatever its severity score says.
+    """
+
+    cve_id = models.CharField(max_length=32, primary_key=True)
+    vendor = models.CharField(max_length=255, blank=True, default="")
+    product = models.CharField(max_length=255, blank=True, default="")
+    name = models.CharField(max_length=500, blank=True, default="")
+    description = models.TextField(blank=True, default="")
+    required_action = models.TextField(blank=True, default="")
+    date_added = models.DateField(null=True, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    # "Known" when ransomware groups are known to use it.
+    ransomware = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-date_added"]
+
+    def __str__(self):
+        return f"{self.cve_id} {self.name}"
