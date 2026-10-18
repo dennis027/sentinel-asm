@@ -66,6 +66,28 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "ghpages": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "8kB",
+                  "maximumError": "10kB"
+                }
+              ],
+              "outputHashing": "all",
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.ghpages.ts"
+                }
+              ],
+              "baseHref": "/sentinel-asm/"
             }
           },
           "defaultConfiguration": "production"
