@@ -10,10 +10,11 @@ python manage.py migrate --noinput
 python manage.py setup_periodic_tasks
 python manage.py collectstatic --noinput -v0
 
-# The first user, from DJANGO_SUPERUSER_USERNAME / _EMAIL / _PASSWORD
-# (there is no shell on Render's free plan). Already there: nothing to do.
+# The admin user, from DJANGO_SUPERUSER_USERNAME / _EMAIL / _PASSWORD
+# (there is no shell on Render's free plan). Created, or brought up to date
+# with those settings, on every start.
 if [ -n "$DJANGO_SUPERUSER_USERNAME" ] && [ -n "$DJANGO_SUPERUSER_PASSWORD" ]; then
-  python manage.py createsuperuser --noinput 2>/dev/null || echo "Admin user already exists."
+  python manage.py ensure_admin
   # The demo company (Acme Retail). The container's disk is wiped on every
   # restart, so it is reloaded each time to bring its screenshots back.
   if [ "${DEMO_DATA:-true}" = "true" ]; then
