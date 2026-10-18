@@ -51,7 +51,7 @@ export class OrganizationService {
   /** Admin or higher. */
   update(
     id: string,
-    change: Partial<Pick<Organization, 'name' | 'sla_days' | 'scope_exclusions'>>,
+    change: Partial<Pick<Organization, 'name' | 'sla_days' | 'scope_exclusions' | 'log_retention_days'>>,
   ): Observable<Organization> {
     return this.http.patch<Organization>(`${this.base}/${id}/`, change);
   }

@@ -61,6 +61,14 @@ class Command(BaseCommand):
             f"{verb} periodic task '{reaper.name}' -> runs every {self.REAP_EVERY_MINUTES} minutes."
         ))
 
+        log_check = PeriodicTask.objects.update_or_create(
+            name="check-log-sources",
+            defaults=dict(interval=interval, crontab=None, task="apps.logs.tasks.check_log_sources", enabled=True),
+        )[0]
+        self.stdout.write(self.style.SUCCESS(
+            f"Set up periodic task '{log_check.name}' -> runs every {self.REAP_EVERY_MINUTES} minutes."
+        ))
+
         snapshots, _ = CrontabSchedule.objects.get_or_create(
             minute="30", hour="23", day_of_week="*", day_of_month="*", month_of_year="*",
         )
@@ -71,6 +79,8 @@ class Command(BaseCommand):
             ("record-risk-snapshots", "apps.findings.tasks.record_risk_snapshots", snapshots, "daily at 23:30 UTC"),
             ("send-weekly-reports", "apps.notifications.tasks.send_weekly_reports", weekly, "Mondays at 07:00 UTC"),
             ("expire-risk-acceptances", "apps.findings.tasks.expire_risk_acceptances", snapshots, "daily at 23:30 UTC"),
+            ("purge-old-log-events", "apps.logs.tasks.purge_old_log_events", snapshots, "daily at 23:30 UTC"),
+            ("sync-known-exploited", "apps.findings.tasks.sync_known_exploited", schedule, f"daily at {hour:02d}:00 UTC"),
         ]:
             task, created = PeriodicTask.objects.update_or_create(
                 name=name, defaults=dict(crontab=crontab, interval=None, task=task_path, enabled=True),

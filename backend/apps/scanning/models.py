@@ -2,6 +2,7 @@ import hashlib
 import uuid
 from datetime import date
 
+from django.conf import settings
 from django.db import models
 
 from apps.assets.models import Asset
@@ -81,6 +82,24 @@ class ScanJob(models.Model):
     # Null for single-asset triggers and the daily schedule.
     batch_id = models.UUIDField(null=True, blank=True, db_index=True, editable=False)
 
+    # Where the scan came from, so history can be read as "the nightly
+    # run", "Amina's Run scan", "Brian's re-check of shop" rather than
+    # thousands of loose rows.
+    class Trigger(models.TextChoices):
+        SCHEDULE = "schedule", "Daily schedule"
+        DOMAIN = "domain", "Run scan"
+        RECHECK = "recheck", "Re-check of a host"
+        SINGLE = "single", "Single scan"
+
+    trigger = models.CharField(max_length=16, choices=Trigger.choices, default=Trigger.SINGLE, db_index=True)
+    triggered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        help_text="Who started it; empty for the daily schedule.",
+    )
+    # Shared by every job started together: one night's schedule for an
+    # organization, one Run scan click, one host re-check.
+    run_id = models.UUIDField(default=uuid.uuid4, db_index=True, editable=False)
+
     idempotency_key = models.CharField(max_length=64, unique=True, editable=False)
 
     error_message = models.TextField(blank=True, default="")
@@ -98,6 +117,12 @@ class ScanJob(models.Model):
     def __str__(self):
         target = self.asset.value if self.asset else self.organization.root_domain
         return f"{self.scanner_name} -> {target} [{self.status}]"
+
+    @staticmethod
+    def schedule_run_id(organization_id, run_date: date | None = None) -> uuid.UUID:
+        """One run id per organization per day for the daily schedule (the same if beat fires twice)."""
+        run_date = run_date or date.today()
+        return uuid.uuid5(uuid.NAMESPACE_URL, f"densight:schedule:{organization_id}:{run_date.isoformat()}")
 
     @staticmethod
     def build_idempotency_key(

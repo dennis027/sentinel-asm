@@ -7,9 +7,20 @@ from .models import ScanJob
 from .plugins.registry import list_scanners
 
 
+def person(user) -> str | None:
+    if user is None:
+        return None
+    return user.get_full_name() or user.username
+
+
 class ScanJobSerializer(serializers.ModelSerializer):
     asset_value = serializers.CharField(source="asset.value", read_only=True, default=None)
     organization_name = serializers.CharField(source="organization.name", read_only=True)
+    trigger_label = serializers.CharField(source="get_trigger_display", read_only=True)
+    triggered_by = serializers.SerializerMethodField()
+
+    def get_triggered_by(self, job) -> str | None:
+        return person(job.triggered_by)
 
     class Meta:
         model = ScanJob
@@ -17,6 +28,7 @@ class ScanJobSerializer(serializers.ModelSerializer):
             "id", "organization", "organization_name", "asset", "asset_value",
             "scanner_name", "status", "error_message",
             "created_at", "started_at", "finished_at",
+            "trigger", "trigger_label", "triggered_by", "run_id",
         ]
         read_only_fields = fields
 
@@ -40,6 +52,12 @@ class ScanJobTriggerSerializer(serializers.Serializer):
             "existing job instead of duplicating it."
         ),
     )
+
+    # Several single-asset scans started together (the asset page's "Re-check
+    # this host" starts every scanner) pass the same run_id and reason
+    # "recheck", so history shows them as one re-check.
+    run_id = serializers.UUIDField(required=False)
+    reason = serializers.ChoiceField(choices=["recheck", "single"], default="single")
 
     def validate_scanner_name(self, value):
         registered = list_scanners()

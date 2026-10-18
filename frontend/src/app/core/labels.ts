@@ -22,6 +22,14 @@ const FINDING_TYPE_LABELS: Record<FindingType, string> = {
   insecure_cookie: 'Cookie security',
   https_not_enforced: 'HTTPS enforcement',
   lookalike_domain: 'Lookalike domain',
+  exposed_panel: 'Exposed admin panel',
+  api_exposure: 'API exposure',
+  dns_hygiene: 'DNS hygiene',
+  cert_issued: 'Certificate',
+  unusual_certificate: 'Unusual certificate',
+  exposed_secret: 'Secret in public code',
+  public_bucket: 'Public cloud storage',
+  domain_registration: 'Domain registration',
 };
 
 export function findingTypeLabel(type: string): string {

@@ -130,8 +130,12 @@ export class AssetDetail implements OnDestroy {
     this.scannerService.list().subscribe({
       next: (scanners) => {
         const hostScanners = scanners.filter((s) => s.applies_to === 'asset');
+        // One run id for all of them: Scan history shows them as one re-check.
+        const run = crypto.randomUUID();
         forkJoin(
-          hostScanners.map((s) => this.scanJobService.trigger({ scanner_name: s.name, asset_id: asset.id, force: true })),
+          hostScanners.map((s) =>
+            this.scanJobService.trigger({ scanner_name: s.name, asset_id: asset.id, force: true, run_id: run, reason: 'recheck' }),
+          ),
         ).subscribe({
           next: () => {
             this.isRescanning.set(false);

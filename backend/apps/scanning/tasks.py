@@ -113,6 +113,7 @@ def run_scan_job(self, scan_job_id: str):
                     title=rf.title,
                     description=rf.description,
                     raw_data=rf.raw_data,
+                    cves=Finding.extract_cves(rf.title, rf.raw_data),
                     is_active=True,
                     resolved_at=None,
                 ),
@@ -311,7 +312,8 @@ def _enqueue_if_new(scanner_name, target_value, organization, asset) -> int:
     idempotency_key = ScanJob.build_idempotency_key(scanner_name, target_value)
     scan_job, created = ScanJob.objects.get_or_create(
         idempotency_key=idempotency_key,
-        defaults=dict(organization=organization, asset=asset, scanner_name=scanner_name),
+        defaults=dict(organization=organization, asset=asset, scanner_name=scanner_name,
+                      trigger=ScanJob.Trigger.SCHEDULE, run_id=ScanJob.schedule_run_id(organization.id)),
     )
     if created:
         run_scan_job.delay(str(scan_job.id))
@@ -362,7 +364,7 @@ def domain_scan_lock_key(organization_id, scanner_name: str) -> str:
 
 
 @shared_task
-def fan_out_domain_scan(organization_id: str, scanner_name: str, batch_id: str):
+def fan_out_domain_scan(organization_id: str, scanner_name: str, batch_id: str, user_id: int | None = None):
     """
     Starts one asset-level scanner on EVERY active asset of an
     organization -- what "Run scan" on the Scanners page does. Runs as
@@ -387,6 +389,9 @@ def fan_out_domain_scan(organization_id: str, scanner_name: str, batch_id: str):
                     asset=asset,
                     scanner_name=scanner_name,
                     batch_id=batch_id,
+                    trigger=ScanJob.Trigger.DOMAIN,
+                    run_id=batch_id,
+                    triggered_by_id=user_id,
                     idempotency_key=ScanJob.build_idempotency_key(
                         scanner_name, asset.value, nonce=batch_id
                     ),
