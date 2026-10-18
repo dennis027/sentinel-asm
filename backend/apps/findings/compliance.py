@@ -31,6 +31,7 @@ CONTROLS = {
     "owasp:A07": "Identification and Authentication Failures",
     "cis:1.1": "Establish and maintain a detailed enterprise asset inventory",
     "cis:2.2": "Ensure authorized software is currently supported",
+    "cis:3.3": "Configure data access control lists",
     "cis:3.10": "Encrypt sensitive data in transit",
     "cis:4.1": "Establish and maintain a secure configuration process",
     "cis:4.4": "Implement and manage a firewall on servers",
@@ -40,6 +41,8 @@ CONTROLS = {
     "iso27001:A.5.7": "Threat intelligence",
     "iso27001:A.5.9": "Inventory of information and other associated assets",
     "iso27001:A.5.14": "Information transfer",
+    "iso27001:A.8.3": "Information access restriction",
+    "iso27001:A.8.4": "Access to source code",
     "iso27001:A.8.8": "Management of technical vulnerabilities",
     "iso27001:A.8.9": "Configuration management",
     "iso27001:A.8.20": "Networks security",
@@ -47,11 +50,13 @@ CONTROLS = {
     "iso27001:A.8.26": "Application security requirements",
     "pci:1.3": "Network access to and from the cardholder data environment is restricted",
     "pci:2.2": "System components are configured and managed securely",
+    "pci:3.6": "Cryptographic keys used to protect stored account data are secured",
     "pci:4.2": "Strong cryptography protects data during transmission",
     "pci:5.4": "Anti-phishing mechanisms protect users against phishing attacks",
     "pci:6.2": "Bespoke and custom software is developed securely",
     "pci:6.3": "Security vulnerabilities are identified and addressed",
     "pci:6.4": "Public-facing web applications are protected against attacks",
+    "pci:7.2": "Access to system components and data is appropriately defined and assigned",
     "pci:11.3": "External and internal vulnerabilities are regularly identified and addressed",
     "pci:12.5": "An inventory of in-scope system components is maintained",
     "attack:T1190": "Exploit Public-Facing Application",
@@ -65,6 +70,8 @@ CONTROLS = {
     "attack:T1584.001": "Compromise Infrastructure: Domains",
     "attack:T1590.002": "Gather Victim Network Information: DNS",
     "attack:T1189": "Drive-by Compromise",
+    "attack:T1588.004": "Obtain Capabilities: Digital Certificates",
+    "attack:T1530": "Data from Cloud Storage",
 }
 
 T = Finding.FindingType
@@ -85,9 +92,17 @@ MAPPING: dict[str, list[str]] = {
     T.EMAIL_SECURITY: ["cis:9.5", "iso27001:A.5.14", "pci:5.4", "attack:T1566"],
     T.SECURITY_TXT: ["cis:7", "iso27001:A.8.8"],
     T.LOOKALIKE_DOMAIN: ["iso27001:A.5.7", "pci:5.4", "attack:T1583.001", "attack:T1566"],
+    T.EXPOSED_PANEL: ["owasp:A05", "owasp:A07", "cis:4.4", "iso27001:A.8.20", "pci:1.3", "attack:T1133", "attack:T1190"],
+    T.API_EXPOSURE: ["owasp:A01", "owasp:A05", "iso27001:A.8.26", "pci:6.4", "attack:T1190"],
+    T.DNS_HYGIENE: ["owasp:A05", "cis:4.1", "iso27001:A.8.9", "attack:T1557"],
+    T.EXPOSED_SECRET: ["owasp:A02", "owasp:A05", "cis:3.3", "iso27001:A.8.4", "pci:3.6", "attack:T1552.001"],
+    T.PUBLIC_BUCKET: ["owasp:A01", "owasp:A05", "cis:3.3", "iso27001:A.8.3", "pci:7.2", "attack:T1530"],
+    T.DOMAIN_REGISTRATION: ["cis:1.1", "iso27001:A.5.9", "attack:T1584.001"],
+    T.UNUSUAL_CERT: ["owasp:A02", "iso27001:A.5.7", "attack:T1588.004", "attack:T1557"],
     # Inventory: evidence that the asset inventory is kept, not issues.
     T.SUBDOMAIN_DISCOVERED: ["cis:1.1", "iso27001:A.5.9", "pci:12.5"],
     T.DNS_CHANGE: ["cis:1.1", "iso27001:A.5.9"],
+    T.CERT_ISSUED: ["cis:1.1", "iso27001:A.5.9"],
 }
 
 DISCLAIMER = (
