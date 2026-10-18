@@ -51,3 +51,14 @@ def expire_risk_acceptances():
         )
         count += 1
     return f"Reopened {count} finding(s) whose risk acceptance ended."
+
+
+@shared_task
+def sync_known_exploited():
+    """Daily (celery-beat): refreshes CISA's known-exploited catalogue. Offline is not an error."""
+    from .kev import sync
+
+    try:
+        return f"Known-exploited catalogue: {sync()} entries."
+    except OSError as exc:
+        return f"Could not reach the CISA catalogue ({exc}); keeping the copy we have."
