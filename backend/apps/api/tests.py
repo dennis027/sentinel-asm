@@ -926,7 +926,9 @@ class DomainScanTests(OrgTestCase):
         self.assertEqual(response.status_code, 202)
         body = response.json()
         self.assertEqual(body["target_count"], 5)  # root domain + 4 hosts, not the inactive one
-        fan_out.assert_called_once_with(str(self.org.id), "nmap", body["batch_id"])
+        # The last argument is who started it, recorded on every scan of the run.
+        fan_out.assert_called_once_with(str(self.org.id), "nmap", body["batch_id"], fan_out.call_args.args[3])
+        self.assertIsNotNone(fan_out.call_args.args[3])
 
         with patch("apps.scanning.tasks.run_scan_job.delay") as run:
             fan_out_domain_scan(str(self.org.id), "nmap", body["batch_id"])
@@ -1599,7 +1601,7 @@ class ScannerCategoryTests(OrgTestCase):
     def test_every_scanner_has_a_known_category(self):
         self.login("viewer")
         categories = {s["name"]: s["category"] for s in self.client.get("/api/scanners/").json()}
-        self.assertEqual(len(categories), 18)
+        self.assertEqual(len(categories), 25)
         self.assertEqual(set(categories.values()), {"discovery", "network", "web", "encryption", "email_domain"})
 
 
