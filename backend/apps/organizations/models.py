@@ -40,6 +40,8 @@ class Organization(models.Model):
     # site) that the organization isn't allowed to test. "*.name"
     # covers everything under name. See `is_out_of_scope`.
     scope_exclusions = models.JSONField(blank=True, default=list)
+    # How long server logs (apps.logs) are kept before the daily clean-up deletes them.
+    log_retention_days = models.PositiveSmallIntegerField(default=30)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
