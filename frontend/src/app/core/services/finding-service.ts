@@ -32,6 +32,8 @@ export interface FindingFilters {
   control?: string;
   // Fixed once, then found again.
   regressed?: boolean;
+  // About a CVE in CISA's known-exploited catalogue.
+  known_exploited?: boolean;
   asset_criticality?: Criticality;
 }
 

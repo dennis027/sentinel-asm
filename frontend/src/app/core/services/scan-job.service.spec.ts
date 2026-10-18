@@ -21,6 +21,10 @@ function makeJob(overrides: Partial<ScanJob> = {}): ScanJob {
     created_at: '2026-01-01T00:00:00Z',
     started_at: null,
     finished_at: null,
+    trigger: 'single',
+    trigger_label: 'Single scan',
+    triggered_by: null,
+    run_id: 'run-1',
     ...overrides,
   };
 }

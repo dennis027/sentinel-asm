@@ -27,6 +27,8 @@ export interface Organization {
   sla_days: Record<'critical' | 'high' | 'medium' | 'low', number>;
   // Host names never to scan; "*.name" covers everything under name.
   scope_exclusions: string[];
+  // How long server logs are kept, in days.
+  log_retention_days: number;
 }
 
 export interface Member {
@@ -87,6 +89,37 @@ export interface ScanJob {
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
+  trigger: ScanTrigger;
+  trigger_label: string;
+  // Who started it; null for the daily schedule.
+  triggered_by: string | null;
+  // Shared by every scan started together.
+  run_id: string;
+}
+
+/** Where a scan came from. */
+export type ScanTrigger = 'schedule' | 'domain' | 'recheck' | 'single';
+
+/** Scans started together (a night's schedule, a Run scan click, a re-check), as one. */
+export interface ScanRun {
+  run_id: string;
+  trigger: ScanTrigger;
+  trigger_label: string;
+  triggered_by: string | null;
+  // Set when the whole run was one scanner / one host.
+  scanner_name: string | null;
+  scanner_label: string | null;
+  host: string | null;
+  scanners: number;
+  hosts: number;
+  organization_level: boolean;
+  jobs: number;
+  succeeded: number;
+  failed: number;
+  unfinished: number;
+  new_findings: number;
+  started: string;
+  finished: string | null;
 }
 
 export interface TriggerScanRequest {
@@ -94,6 +127,9 @@ export interface TriggerScanRequest {
   asset_id?: string;
   organization_id?: string;
   force?: boolean;
+  // Several scans started together share a run id; "recheck" marks a host re-check.
+  run_id?: string;
+  reason?: 'recheck' | 'single';
 }
 
 // Reply to starting a scanner for a whole organization.
@@ -138,7 +174,15 @@ export type FindingType =
   | 'cors_misconfiguration'
   | 'insecure_cookie'
   | 'https_not_enforced'
-  | 'lookalike_domain';
+  | 'lookalike_domain'
+  | 'exposed_panel'
+  | 'api_exposure'
+  | 'dns_hygiene'
+  | 'cert_issued'
+  | 'unusual_certificate'
+  | 'exposed_secret'
+  | 'public_bucket'
+  | 'domain_registration';
 
 export type FindingStatus = 'open' | 'accepted' | 'false_positive';
 
@@ -177,6 +221,19 @@ export interface Finding {
   reopened_count: number;
   reopened_at: string | null;
   asset_criticality: Criticality;
+  // CVE ids the finding is about.
+  cves: string[];
+  // Set when one of them is in CISA's Known Exploited Vulnerabilities catalogue.
+  known_exploited: KnownExploited | null;
+}
+
+export interface KnownExploited {
+  cve: string;
+  name: string;
+  date_added: string | null;
+  due_date: string | null;
+  ransomware: boolean;
+  required_action: string;
 }
 
 export interface FindingComment {
@@ -203,6 +260,7 @@ export interface FixPlanStep {
   hosts: number;
   crown_jewels: number;
   overdue: number;
+  known_exploited: number;
   items: { finding: string; asset: string; asset_value: string; title: string; severity: Severity }[];
   // The organization's score and grade once this and every earlier step is done.
   score_after: number | null;
@@ -421,4 +479,178 @@ export interface Paginated<T> {
   next: string | null;
   previous: string | null;
   results: T[];
+}
+// ---------------- Server logs ----------------
+
+export type LogSourceStatus = 'waiting' | 'receiving' | 'silent';
+export type LogSourceKind =
+  | 'linux'
+  | 'windows'
+  | 'python'
+  | 'node'
+  | 'php'
+  | 'ruby'
+  | 'go'
+  | 'java'
+  | 'dotnet'
+  | 'other';
+
+export interface LogSource {
+  id: string;
+  organization: string;
+  name: string;
+  // A server's operating system, or an application's runtime.
+  os: LogSourceKind;
+  is_application: boolean;
+  key_prefix: string;
+  created_at: string;
+  last_seen_at: string | null;
+  last_host: string;
+  events_received: number;
+  status: LogSourceStatus;
+  open_detections: number;
+  // Only when the server is connected or its key replaced.
+  key?: string;
+  ingest_url?: string;
+}
+
+export type LogCategory =
+  | 'auth_success'
+  | 'auth_failure'
+  | 'privilege'
+  | 'account_change'
+  | 'log_tampering'
+  | 'service'
+  | 'app_error'
+  | 'http_request'
+  | 'other';
+
+export interface LogEventRow {
+  id: number;
+  source: string;
+  source_name: string;
+  occurred_at: string;
+  received_at: string;
+  host: string;
+  program: string;
+  event_id: number | null;
+  level: 'info' | 'warning' | 'error';
+  category: LogCategory;
+  category_label: string;
+  action: string;
+  user: string;
+  src_ip: string | null;
+  message: string;
+  raw: Record<string, unknown>;
+  service: string;
+  http_status: number | null;
+  fingerprint: string;
+  // Kinds of secret masked out before storing.
+  redacted: string[];
+  release: string;
+}
+
+export interface ErrorGroup {
+  id: string;
+  source: string;
+  source_name: string;
+  fingerprint: string;
+  exception_type: string;
+  title: string;
+  culprit: string;
+  service: string;
+  count: number;
+  first_seen: string;
+  last_seen: string;
+  stacktrace: string;
+  status: 'unresolved' | 'resolved' | 'ignored';
+  resolved_at: string | null;
+  regressions: number;
+  first_release: string;
+  last_release: string;
+}
+
+/** How many events each option of each search filter would give, with the other filters applied. */
+export interface LogFacets {
+  source: Record<string, number>;
+  category: Partial<Record<LogCategory, number>>;
+  level: Partial<Record<'info' | 'warning' | 'error', number>>;
+  service: [string, number][];
+  release: [string, number][];
+  host: [string, number][];
+  status: Record<'2xx' | '3xx' | '4xx' | '5xx', number>;
+}
+
+/** Matching events over time, split by level. */
+export interface LogTimeline {
+  start: string;
+  end: string;
+  bucket_seconds: number;
+  buckets: { t: string; error: number; warning: number; info: number }[];
+}
+
+/** An application release seen in the logs (last 30 days). */
+export interface AppRelease {
+  source: string;
+  source_name: string;
+  release: string;
+  first_seen: string;
+  last_seen: string;
+  events: number;
+  errors: number;
+  new_errors: number;
+}
+
+/** An organization's own log alert: "<contains> seen <threshold> times within <window_minutes>". */
+export interface LogAlertRule {
+  id: string;
+  organization: string;
+  name: string;
+  contains: string;
+  source: string | null;
+  source_name: string | null;
+  category: LogCategory | '';
+  level: '' | 'warning' | 'error';
+  threshold: number;
+  window_minutes: number;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  enabled: boolean;
+  created_by: string | null;
+  created_at: string;
+  last_fired_at: string | null;
+  matches_24h: number;
+}
+
+export interface LogDetection {
+  id: string;
+  source: string;
+  source_name: string;
+  rule: string;
+  severity: Severity;
+  title: string;
+  description: string;
+  user: string;
+  src_ip: string | null;
+  event_count: number;
+  first_seen: string;
+  last_seen: string;
+  status: 'open' | 'resolved';
+  resolved_at: string | null;
+  resolved_by: string | null;
+}
+
+export interface LogOverview {
+  events_24h: number;
+  by_category_24h: Record<LogCategory, number>;
+  failed_signins_24h: number;
+  sources: { total: number; receiving: number; silent: number; waiting: number };
+  open_detections: number;
+  applications: number;
+  errors_24h: number;
+  server_errors_24h: number;
+  unresolved_errors: number;
+  open_by_severity: Partial<Record<Severity, number>>;
+  top_attackers_24h: { ip: string; failures: number }[];
+  retention_days: number;
+  rules: { rule: string; severity: Severity; title: string; description: string }[];
 }
