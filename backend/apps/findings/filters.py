@@ -27,6 +27,8 @@ class FindingFilter(django_filters.FilterSet):
     # control=owasp:A05 -> findings of the kinds mapped to that control
     control = django_filters.ChoiceFilter(choices=[(c, c) for c in CONTROLS], method="filter_control")
 
+    # known_exploited=true -> about a CVE in CISA's known-exploited catalogue
+    known_exploited = django_filters.BooleanFilter(method="filter_known_exploited")
     # regressed=true -> fixed once, then found again
     regressed = django_filters.BooleanFilter(method="filter_regressed")
     # asset_criticality=crown_jewel -> issues on the hosts that matter most
@@ -51,6 +53,12 @@ class FindingFilter(django_filters.FilterSet):
             id__in=queryset.order_by().values("asset__organization").distinct()
         )
         condition = overdue_q_for(organizations) & ~Q(finding_type__in=Finding.INVENTORY_TYPES)
+        return queryset.filter(condition) if value else queryset.exclude(condition)
+
+    def filter_known_exploited(self, queryset, name, value):
+        from .kev import index
+
+        condition = Q(cves__overlap=list(index())) if index() else Q(pk__in=[])
         return queryset.filter(condition) if value else queryset.exclude(condition)
 
     def filter_regressed(self, queryset, name, value):
