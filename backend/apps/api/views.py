@@ -16,7 +16,8 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Count, Min
+from django.contrib.auth import get_user_model
+from django.db.models import Count, F, Max, Min, Q
 from django.http import FileResponse, Http404, HttpResponse
 from django.utils import timezone
 import django_filters
@@ -24,7 +25,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -85,8 +86,11 @@ from apps.scanning.serializers import (
     ScanJobTriggerSerializer,
     ScannerInfoSerializer,
     ScanProgressSerializer,
+    person,
 )
 from apps.scanning.tasks import domain_scan_lock_key, fan_out_domain_scan, run_scan_job
+
+User = get_user_model()
 
 from .permissions import OrgScopedQuerysetMixin, require_org_role, user_can_access_org
 
@@ -651,11 +655,91 @@ class AssetViewSet(
 
 
 class ScanJobViewSet(OrgScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
-    queryset = ScanJob.objects.select_related("organization", "asset")
+    queryset = ScanJob.objects.select_related("organization", "asset", "triggered_by")
     serializer_class = ScanJobSerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ["organization", "asset", "scanner_name", "status"]
+    filterset_fields = ["organization", "asset", "scanner_name", "status", "trigger", "run_id"]
     org_field = "organization"
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("organization", OpenApiTypes.UUID, required=True),
+            OpenApiParameter("trigger", OpenApiTypes.STR, enum=ScanJob.Trigger.values),
+            OpenApiParameter("status", OpenApiTypes.STR, enum=["running", "failed", "success"]),
+        ],
+        responses={200: OpenApiTypes.OBJECT},
+    )
+    @action(detail=False, methods=["get"], filter_backends=[])
+    def runs(self, request):
+        """
+        GET /api/scan-jobs/runs/?organization=<uuid>
+        Scan history grouped by where it came from: one row per run (a night's
+        schedule, a Run scan click, a host re-check, a single scan), with what
+        it covered, how far it has got and what it found. Newest first.
+        Filters: trigger, status (running: not finished yet; failed: had failures).
+        """
+        params = request.query_params
+        organization = params.get("organization")
+        if not organization:
+            raise ValidationError({"organization": ["Choose one of your organizations."]})
+        jobs = super().get_queryset().filter(organization_id=organization)
+        if params.get("trigger") in ScanJob.Trigger.values:
+            jobs = jobs.filter(trigger=params["trigger"])
+        unfinished = [ScanJob.Status.PENDING, ScanJob.Status.RUNNING, ScanJob.Status.RETRYING]
+        runs = (
+            jobs.order_by().values("run_id", "trigger", "triggered_by")
+            .annotate(
+                jobs=Count("id"),
+                succeeded=Count("id", filter=Q(status=ScanJob.Status.SUCCESS)),
+                failed=Count("id", filter=Q(status=ScanJob.Status.FAILED)),
+                unfinished=Count("id", filter=Q(status__in=unfinished)),
+                scanners=Count("scanner_name", distinct=True),
+                hosts=Count("asset", distinct=True),
+                organization_level=Count("id", filter=Q(asset__isnull=True)),
+                first_scanner=Min("scanner_name"), last_scanner=Max("scanner_name"),
+                first_asset=Min("asset__value"), last_asset=Max("asset__value"),
+                started=Min("created_at"), finished=Max("finished_at"),
+            )
+        )
+        if params.get("status") == "running":
+            runs = runs.filter(unfinished__gt=0)
+        elif params.get("status") == "failed":
+            runs = runs.filter(failed__gt=0)
+        runs = runs.order_by("-started")
+
+        paginator = self.paginator
+        page = paginator.paginate_queryset(runs, request, view=self)
+        users = {u.id: u for u in User.objects.filter(id__in={r["triggered_by"] for r in page if r["triggered_by"]})}
+        labels = {name: get_scanner(name).label or name for name in list_scanners()}
+        new_findings = dict(
+            Finding.objects.filter(scan_job__run_id__in=[r["run_id"] for r in page])
+            .values_list("scan_job__run_id").annotate(n=Count("id", filter=Q(first_seen__gte=F("scan_job__created_at"))))
+        )
+        results = []
+        for run in page:
+            one_scanner = run["first_scanner"] == run["last_scanner"]
+            one_host = run["hosts"] <= 1 and not (run["hosts"] and run["organization_level"])
+            host = run["first_asset"] if run["hosts"] == 1 and run["first_asset"] == run["last_asset"] else None
+            results.append({
+                "run_id": run["run_id"],
+                "trigger": run["trigger"],
+                "trigger_label": ScanJob.Trigger(run["trigger"]).label,
+                "triggered_by": person(users.get(run["triggered_by"])),
+                "scanner_name": run["first_scanner"] if one_scanner else None,
+                "scanner_label": labels.get(run["first_scanner"], run["first_scanner"]) if one_scanner else None,
+                "scanners": run["scanners"],
+                "hosts": run["hosts"],
+                "host": host if one_host else None,
+                "organization_level": run["organization_level"] > 0,
+                "jobs": run["jobs"],
+                "succeeded": run["succeeded"],
+                "failed": run["failed"],
+                "unfinished": run["unfinished"],
+                "new_findings": new_findings.get(run["run_id"], 0),
+                "started": run["started"],
+                "finished": run["finished"] if not run["unfinished"] else None,
+            })
+        return paginator.get_paginated_response(results)
 
     @action(detail=False, methods=["post"])
     def trigger(self, request):
@@ -697,6 +781,14 @@ class ScanJobViewSet(OrgScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
         if data["asset"] is None:
             return self._start_domain_scan(data["organization"], data["scanner_name"])
 
+        # A re-check groups under the run id it was given, unless that id is already
+        # someone else's run (or another organization's): then it gets its own.
+        run_id = data.get("run_id") or uuid.uuid4()
+        if ScanJob.objects.filter(run_id=run_id).exclude(
+            organization=data["organization"], triggered_by=request.user, trigger=ScanJob.Trigger.RECHECK
+        ).exists():
+            run_id = uuid.uuid4()
+
         target_value = data["asset"].value
         if data["organization"].is_out_of_scope(target_value):
             return Response(
@@ -720,6 +812,9 @@ class ScanJobViewSet(OrgScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
                 organization=data["organization"],
                 asset=data["asset"],
                 scanner_name=data["scanner_name"],
+                trigger=ScanJob.Trigger.RECHECK if data["reason"] == "recheck" else ScanJob.Trigger.SINGLE,
+                triggered_by=request.user,
+                run_id=run_id,
             ),
         )
 
@@ -765,6 +860,9 @@ class ScanJobViewSet(OrgScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
                 asset=None,
                 scanner_name=scanner_name,
                 batch_id=batch_id,
+                trigger=ScanJob.Trigger.DOMAIN,
+                run_id=batch_id,
+                triggered_by=self.request.user,
                 idempotency_key=ScanJob.build_idempotency_key(
                     scanner_name, organization.root_domain, nonce=str(batch_id)
                 ),
@@ -774,7 +872,7 @@ class ScanJobViewSet(OrgScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
             target_count = 1
         else:
             target_count = organization.scannable_assets().count()
-            fan_out_domain_scan.delay(str(organization.id), scanner_name, str(batch_id))
+            fan_out_domain_scan.delay(str(organization.id), scanner_name, str(batch_id), self.request.user.id)
 
         scanner = get_scanner(scanner_name)
         record_activity(
