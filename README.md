@@ -564,6 +564,31 @@ Migrations, static files and the periodic tasks are set up when the
 Caddy, Cloudflare) and set `DJANGO_HTTPS=True` and
 `CSRF_TRUSTED_ORIGINS`. `.env.example` documents every setting.
 
+### On Render
+
+`render.yaml` is a Render Blueprint for the same stack as separate Render
+services: the Angular app as a Static Site (it forwards `/api`, `/admin`,
+`/static` and `/health` to the API, so the browser talks to one address), the
+API as a Web Service, the Celery worker and beat as Background Workers, and
+Redis as Key Value. Two things differ from docker compose:
+
+- **Database:** Neon (`DATABASE_URL`, the pooled connection string).
+- **Screenshots:** Render services can't share a disk, so the worker stores
+  screenshots in S3-compatible object storage and the API streams them from
+  there. Cloudflare R2 works well: create a bucket, an API token with Object
+  Read & Write, and set `S3_BUCKET`, `S3_ENDPOINT_URL`
+  (`https://<account id>.r2.cloudflarestorage.com`), `S3_ACCESS_KEY_ID`,
+  `S3_SECRET_ACCESS_KEY`. The bucket stays private. Locally, and with
+  `docker-compose.prod.yml`, `S3_BUCKET` empty keeps them on disk.
+
+Render dashboard → New → Blueprint → this repository. It asks for the values
+marked `sync: false` (the site's address, Neon, R2, email); the secret key is
+generated. Migrations and the periodic tasks run before each deploy. The
+worker and beat are paid plans (the worker needs 2 GB for Chromium and
+nuclei); if Render names the API anything other than `densight-api.onrender.com`,
+update the four rewrite rules in `render.yaml` to match. Then create the first
+user from the API service's Shell: `python manage.py createsuperuser`.
+
 `/metrics` is not exposed through nginx. To scrape it, set
 `METRICS_TOKEN` and have Prometheus reach `api:8000` on the compose
 network with that bearer token.
