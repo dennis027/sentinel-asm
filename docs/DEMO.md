@@ -56,7 +56,7 @@ first); the second half is how the team works with it.
 | 3 | Dashboard | Point at the **grade (C)** and the **90-day trend**. | "Three months ago they were a D. The grade is held at C because critical issues are still open: one exposed database is enough, however tidy the rest is." |
 | 4 | Dashboard | Scroll to **Grade, day by day** and **Where the risk is**; click the darkest square. | "Three months in one picture. And this grid shows where the risk is concentrated; one click to the findings behind it." |
 | 5 | Bell next to the logo | Open it. | "What the team did lately; anything assigned to me is marked." |
-| 6 | **Fix plan** (or the link under the grade) | Read the three lines at the top, then open step 2's hosts. | "This answers 'what do we do on Monday?'. Fix these three and you're a B; get through step ten and you're an A. The plan puts crown-jewel systems first." |
+| 6 | **Fix plan** (or the link under the grade) | Read the three lines at the top; point at step 1's **Exploited in the wild** badge, then open step 2's hosts. | "This answers 'what do we do on Monday?'. Step one is only a *high*, but it's on CISA's list of vulnerabilities attackers are using right now, Citrix Bleed, used in ransomware attacks. So it goes first. The plan puts crown-jewel systems first too." |
 | 7 | Fix plan | **Assign all to…** on a step. | "One click hands a whole fix to the person who owns it." |
 | 8 | **Findings** → *Database dump is publicly downloadable* → **History & comments** | Show **Why it matters**, **How attackers use this**, then the discussion on the right. | "Critical: anyone can download the database. It names the attacker technique, MITRE ATT&CK T1552. And here's the team working it: found, assigned, logs checked, incident opened. All in one place." |
 | 9 | **My work** | Point at the badge in the sidebar. | "Each person sees their own list by deadline. Two of mine are overdue." |
@@ -67,9 +67,13 @@ first); the second half is how the team works with it.
 | 14 | **Compliance** → **MITRE ATT&CK** card | Click it; **View issues** on T1190. | "The same issues seen by auditors (OWASP, CIS, ISO, PCI) and by attackers (ATT&CK)." |
 | 15 | **Organization** | Scroll to **Fix-by deadlines** and **Never scan**. | "Your policy, not ours: how fast each severity must be fixed. And the hosts run by suppliers, which we must not test, are never scanned." |
 | 16 | **Account settings** | Show **Two-factor sign-in**, **API keys**, **Recent sign-ins**. | "A security tool has to be secure itself: two-factor sign-in, read-only API keys for your SIEM, and a record of every sign-in." |
-| 17 | **Alerts & reports** | Read the two tiles at the top; press **Add an alert** and show the three questions and the sentence at the bottom; then **Send test** on the Slack alert. | "Two things: an alert the moment a scan finds something new (once, not every day), and a one-page report every Monday for people who never log in. Setting one up is three questions, and it tells you how many alerts it would have sent last month." |
-| 18 | Anywhere | Press **Ctrl+K**, type `cert`. Then press **?**. | "Anything (a host, an issue, a page) in two keystrokes, and shortcuts for people who live in the tool." |
-| 19 | **Scanners** *(own domain only)* | **Run all scanners**. | "Eighteen checks, from exposed files to lookalike domains, across every host, then daily by themselves." |
+| 17 | **Logs** | Open the critical detection, press **View events**; then open **Sources** → **Connect a server or app** → Windows. | "Densight also watches what happens *on* your servers. Last night someone guessed the deploy password on web-01: 42 failures, then it worked, then they created an admin account. Each server takes five minutes to connect, Linux or Windows, with free standard tools." |
+| 17b | **Logs** → **Errors** | Click the **shop-api 2.15.0** release; open *KeyError* and its stack trace; **Every occurrence**. Clear the filter and point at *TypeError* (payments): **came back 1×**, latest in 3.8.2. Back on **Detections**, show *A secret was written to the logs*. | "Your own apps too, Python and Node. Each error once, however often it happens, with where in the code, and which deploy brought it in: this morning's 2.15.0 broke checkout. This one was marked fixed yesterday and came back in 3.8.2. And somebody's code logged a password; we masked it before storing it and told you." |
+| 17c | **Logs** → **What we watch for** | Show *Card gateway timing out*; press **New alert**, type `refund failed`, **Test on the last 24 hours**. | "Plus your own rules, in plain words. The payments team wrote this one, and it fired during the gateway outage. Before you switch one on, it shows how often it would have gone off yesterday." |
+| 17d | **Findings** | Open *Stripe secret key in public JavaScript*, then *Public Amazon S3 bucket: acme-retail-backups*. | "Two of the most common ways companies leak: a live payment key shipped in the website's JavaScript, and a backup bucket anyone can list. Both found from the outside, the way an attacker would." |
+| 18 | **Alerts & reports** | Read the two tiles at the top; press **Add an alert** and show the three questions and the sentence at the bottom; then **Send test** on the Slack alert. | "Two things: an alert the moment a scan finds something new (once, not every day), and a one-page report every Monday for people who never log in. Setting one up is three questions, and it tells you how many alerts it would have sent last month." |
+| 19 | Anywhere | Press **Ctrl+K**, type `cert`. Then press **?**. | "Anything (a host, an issue, a page) in two keystrokes, and shortcuts for people who live in the tool." |
+| 20 | **Scanners** *(own domain only)* | **Run all scanners**. | "Twenty-five checks, from leaked keys in JavaScript and exposed admin panels and certificate logs to lookalike domains, across every host, then daily by themselves." |
 
 ## Questions you'll probably get
 
@@ -103,6 +107,17 @@ Email and chat alerts (Slack, Teams, Mattermost via webhook), a weekly
 PDF, CSV/JSON/PDF exports, copy-as-ticket, and a documented REST API
 (`/api/docs/`) with read-only API keys for a SIEM or a CI pipeline.
 
+**Can it see attacks on our servers, not just what's exposed?**
+Yes, through **Logs**: Linux and Windows servers send their logs with Fluent Bit (free, standard),
+and Densight flags brute force, a sign-in after many failures, new administrators, cleared logs and more.
+Python and Node.js apps send theirs with a one-file client: errors are grouped with their stack traces,
+and error spikes, attack probes, password guessing and secrets in logs are flagged.
+It is not a full SIEM or APM: it focuses on the security events and errors that matter most, kept for up to a year.
+
+**How do you decide what to fix first?**
+Severity, then business importance, but anything on CISA's Known Exploited Vulnerabilities list goes
+first: those are being used by attackers today.
+
 **How is the tool itself protected?**
 Two-factor sign-in, roles (viewer to owner), API keys that can only read,
 a sign-in history for each person, and an activity log of every
@@ -133,5 +148,14 @@ nothing is sent to a third party.
 - Lookalike detection checks a few hundred common variations, not every
   possible domain, and can't tell who owns one; a domain your company
   registered defensively should be marked as an accepted risk.
+- The cloud storage check only tries names built from your domain and
+  company name; a bucket called something else won't be found. Anyone can
+  create a bucket with a free name, so confirm a public one is yours.
+- The JavaScript check reads the scripts the home page loads, not every
+  page of the site.
+- "Exploited in the wild" only covers findings that name a CVE; most
+  misconfigurations don't have one.
+- App error grouping depends on the app sending stack traces; plain error
+  messages are grouped by their text.
 - The fix plan's grade projection assumes each fix closes the issues as
   listed; the real grade moves when the next scan confirms it.

@@ -16,11 +16,17 @@ from apps.api.auth_views import (
     TwoFactorStatusView,
 )
 
+from apps.logs.ingest import ingest
+from apps.logs.views import client_file
+
 from .metrics import metrics_view
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("health/", include("health.urls")),
+    # Servers' log shippers post here with their own key (apps.logs.ingest).
+    path("api/ingest/", ingest, name="log-ingest"),
+    path("api/logs/clients/<str:name>", client_file, name="log-client-file"),
     path("api/", include("apps.api.urls")),
     path("api/token/", LoginView.as_view(), name="token-obtain-pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
