@@ -74,6 +74,10 @@ class ActivityEvent(models.Model):
         ACCEPTANCE_EXPIRED = "acceptance_expired", "A risk acceptance expired"
         ASSET_UPDATED = "asset_updated", "Changed an asset's details"
         SCOPE_CHANGED = "scope_changed", "Changed what may be scanned"
+        LOG_SOURCE_ADDED = "log_source_added", "Connected a server's logs"
+        LOG_SOURCE_REMOVED = "log_source_removed", "Disconnected a server's logs"
+        LOG_KEY_REPLACED = "log_key_replaced", "Replaced a server's ingest key"
+        DETECTION_RESOLVED = "detection_resolved", "Resolved a log detection"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     organization = models.ForeignKey(
