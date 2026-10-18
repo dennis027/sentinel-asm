@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from .compliance import controls_for
 from .guidance import guidance_for
+from .kev import known_exploited
 from .models import Finding, FindingComment
 from .remediation import due_at, is_overdue
 
@@ -25,6 +26,8 @@ class FindingSerializer(serializers.ModelSerializer):
     controls = serializers.SerializerMethodField()
     # How much the host matters to the business (set on the asset).
     asset_criticality = serializers.CharField(source="asset.criticality", read_only=True)
+    # Set when one of the finding's CVEs is in CISA's known-exploited catalogue.
+    known_exploited = serializers.SerializerMethodField()
 
     class Meta:
         model = Finding
@@ -34,7 +37,7 @@ class FindingSerializer(serializers.ModelSerializer):
             "status", "status_note", "status_changed_at", "status_changed_by",
             "first_seen", "last_seen", "resolved_at",
             "assignee", "assignee_username", "due_at", "overdue", "controls",
-            "accepted_until", "reopened_count", "reopened_at", "asset_criticality",
+            "accepted_until", "reopened_count", "reopened_at", "asset_criticality", "cves", "known_exploited",
         ]
         read_only_fields = fields
 
@@ -52,6 +55,9 @@ class FindingSerializer(serializers.ModelSerializer):
 
     def get_overdue(self, obj) -> bool:
         return obj.finding_type not in Finding.INVENTORY_TYPES and is_overdue(obj)
+
+    def get_known_exploited(self, obj) -> dict | None:
+        return known_exploited(obj.cves)
 
     def get_controls(self, obj) -> list[dict]:
         if obj.finding_type in Finding.INVENTORY_TYPES:
