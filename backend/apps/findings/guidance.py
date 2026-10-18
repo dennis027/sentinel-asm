@@ -283,6 +283,82 @@ CHECK_GUIDANCE = {
         "Without a contact the file does not do its one job.",
         "Add a `Contact:` line with an email address or a reporting form.",
     ),
+    "exposed_panel": (
+        "A management interface is open to anyone on the internet. Attackers find these within hours and try "
+        "default and leaked passwords, and known exploits for that product, against them.",
+        "Put it behind a VPN or an IP allowlist, or take it offline if nobody uses it. Make sure it has strong, "
+        "unique credentials and multi-factor sign-in, and keep it patched.",
+    ),
+    "openapi_spec": (
+        "The full description of the API is public: every endpoint and parameter. That is a map for anyone looking "
+        "for an endpoint that skips a permission check.",
+        "If the API is internal, serve the specification only to signed-in users or inside the network. If it is "
+        "meant to be public, mark this as an accepted risk and make sure every endpoint checks authorisation.",
+    ),
+    "api_docs_ui": (
+        "Interactive API documentation is public, which lets anyone browse and try the API's endpoints.",
+        "Turn it off in production or put it behind sign-in, unless the API is meant to be public.",
+    ),
+    "graphql_introspection": (
+        "The GraphQL API describes its entire schema to anyone who asks, including fields meant for internal or "
+        "admin use.",
+        "Disable introspection in production (most GraphQL servers have a setting), and add depth and cost limits "
+        "to queries.",
+    ),
+    "caa_missing": (
+        "Without a CAA record, any of the hundreds of public certificate authorities may issue a certificate for the "
+        "domain, which makes a mis-issued or fraudulently obtained certificate easier.",
+        "Publish a CAA record naming the authorities you use, e.g. `0 issue \"letsencrypt.org\"`.",
+    ),
+    "dnssec_missing": (
+        "The domain's DNS answers aren't signed, so a resolver can't detect forged answers that send visitors or "
+        "email elsewhere.",
+        "Turn on DNSSEC at your DNS provider and publish the DS record at your registrar.",
+    ),
+    "wildcard_dns": (
+        "Every name under the domain resolves. That hides which hosts really exist, and lets look-alike or mistyped "
+        "names lead somewhere convincing.",
+        "Remove the wildcard record unless a service needs it, and list real hosts explicitly.",
+    ),
+    "single_nameserver": (
+        "Only one nameserver answers for the domain: if it goes down or is attacked, the website and email stop "
+        "working.",
+        "Use at least two nameservers, ideally on different networks (most DNS providers do this by default).",
+    ),
+    "unusual_issuer": (
+        "A certificate for the domain came from an authority the organization doesn't normally use. It can be a "
+        "team setting up a service on its own, or someone obtaining a certificate to impersonate the site.",
+        "Find out who requested it. If nobody did, ask the issuing authority to revoke it, and add a CAA record so "
+        "only your chosen authorities can issue certificates.",
+    ),
+    "exposed_secret": (
+        "A key or token is in JavaScript that every visitor downloads. Automated tools scan public code for keys "
+        "within minutes of it going live, and a server-side key gives whatever access it was made for: payments, "
+        "email sending, cloud resources, source code.",
+        "Revoke or rotate the key first (removing it from the code is not enough: it is already public), check "
+        "the provider's logs for its use, then move the call that needs it to your server so the key never "
+        "reaches the browser.",
+    ),
+    "public_bucket": (
+        "Anyone can list the files in this storage bucket, and usually download them. Open buckets are behind many "
+        "of the largest data leaks: backups, exports and customer uploads that were never meant to be public.",
+        "Confirm the bucket is yours. Turn on the provider's \"block public access\" setting (S3) or remove "
+        "allUsers/allAuthenticatedUsers (Google Cloud), then check its access logs. If it serves public website "
+        "files, keep listing off and mark this as an accepted risk.",
+    ),
+    "domain_expiring": (
+        "When the domain registration lapses, the website and every email address on the domain stop working. "
+        "After the grace period anyone can register it, take over its email and receive password resets meant for "
+        "your accounts.",
+        "Renew it now, turn on auto-renew at the registrar, and make sure the registrar's contact email is a shared "
+        "mailbox that someone reads, not one person's address.",
+    ),
+    "transfer_lock_off": (
+        "Without a transfer lock, a domain can be moved to another registrar by anyone who gets into the registrar "
+        "account or persuades the registrar's support team.",
+        "Turn on the transfer lock (\"registrar lock\") in the registrar's control panel, and protect that account "
+        "with multi-factor sign-in.",
+    ),
     "lookalike_mail": (
         "Someone has registered a domain that looks like yours and set it up to send and receive "
         "email. That is how invoice fraud and phishing in your name usually start: staff, customers "
