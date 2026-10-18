@@ -45,6 +45,40 @@ class LoadDemoDataTests(TestCase):
         self.assertEqual(snapshots.last().score, build_risk_summary(org)["average_risk_score"])
         self.assertTrue(org.activity.exists())
 
+    def test_includes_known_exploited_findings_and_application_logs(self):
+        from apps.findings.insights import build_fix_plan
+        from apps.logs.models import ErrorGroup, LogDetection
+
+        org = self.load()
+        self.assertTrue(Finding.objects.filter(asset__organization=org, cves__contains=["CVE-2023-4966"]).exists())
+        self.assertEqual(build_fix_plan(org)["steps"][0]["known_exploited"], 1)
+
+        groups = ErrorGroup.objects.filter(organization=org)
+        self.assertEqual(set(groups.values_list("source__name", flat=True)), {"shop-api", "payments", "storefront"})
+        deadlock = groups.get(source__name="storefront")
+        self.assertEqual((deadlock.count, deadlock.culprit),
+                         (6, "app/Services/StockReservation.php in Illuminate\\Database\\Query\\Builder->update"))
+        self.assertEqual(groups.get(exception_type="TypeError").regressions, 1)
+        rules = set(LogDetection.objects.filter(source__organization=org, source__os__in=["python", "node"])
+                    .values_list("rule", flat=True))
+        self.assertLessEqual({"new_error", "error_regressed", "server_errors_spike", "attack_probes",
+                              "secrets_logged", "brute_force"}, rules)
+
+        # Releases: the checkout bug arrived with 2.15.0, the refund bug came back in 3.8.2.
+        self.assertEqual(groups.get(exception_type="KeyError").first_release, "2.15.0")
+        refund = groups.get(exception_type="TypeError")
+        self.assertEqual((refund.first_release, refund.last_release), ("3.8.1", "3.8.2"))
+        # The team's own alert fired on the gateway outage.
+        from apps.logs.models import LogAlertRule
+
+        alert = LogAlertRule.objects.get(organization=org, name="Card gateway timing out")
+        self.assertTrue(LogDetection.objects.filter(rule=alert.rule_id).exists())
+
+    def test_includes_the_newest_checks(self):
+        org = self.load()
+        kinds = set(Finding.objects.filter(asset__organization=org).values_list("finding_type", flat=True))
+        self.assertLessEqual({"exposed_secret", "public_bucket", "domain_registration"}, kinds)
+
     def test_reset_replaces_it_and_a_second_load_without_reset_is_refused(self):
         self.load()
         with self.assertRaises(CommandError):

@@ -35,7 +35,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "id", "name", "root_domain", "is_active", "created_at", "updated_at",
             "my_role", "domain_verified", "domain_verified_at", "verification_required",
             "verification_record_name", "verification_record_value", "scans_allowed",
-            "sla_days", "scope_exclusions",
+            "sla_days", "scope_exclusions", "log_retention_days",
         ]
         read_only_fields = ["id", "created_at", "updated_at", "domain_verified_at"]
 
@@ -65,6 +65,15 @@ class OrganizationSerializer(serializers.ModelSerializer):
                 "More serious issues need the same or less time to fix: critical <= high <= medium <= low."
             )
         return policy
+
+    LOG_RETENTION_CHOICES = (7, 14, 30, 60, 90, 180, 365)
+
+    def validate_log_retention_days(self, value):
+        if value not in self.LOG_RETENTION_CHOICES:
+            raise serializers.ValidationError(
+                "Choose one of: " + ", ".join(str(days) for days in self.LOG_RETENTION_CHOICES) + " days."
+            )
+        return value
 
     def validate_scope_exclusions(self, value):
         root = self.instance.root_domain if self.instance else self.initial_data.get("root_domain", "")

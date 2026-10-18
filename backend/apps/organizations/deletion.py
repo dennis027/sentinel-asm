@@ -25,6 +25,7 @@ def delete_organization(organization) -> dict[str, int]:
     from apps.assets.models import Asset, Technology
     from apps.audit_logs.models import ActivityEvent
     from apps.findings.models import Finding, FindingComment, RiskSnapshot
+    from apps.logs.models import ErrorGroup, LogAlertRule, LogDetection, LogEvent, LogSource
     from apps.scanning.models import ScanJob
     from apps.scanning.plugins.registry import list_scanners
     from apps.scanning.tasks import domain_scan_lock_key
@@ -36,6 +37,13 @@ def delete_organization(organization) -> dict[str, int]:
         # Order matters: each statement removes rows nothing else
         # points at any more, so none of them needs a cascade.
         removed = {
+            "log_events": LogEvent.objects.filter(organization=organization)._raw_delete(LogEvent.objects.db),
+            "error_groups": ErrorGroup.objects.filter(organization=organization)._raw_delete(ErrorGroup.objects.db),
+            "log_detections": LogDetection.objects.filter(organization=organization)._raw_delete(LogDetection.objects.db),
+            "log_alert_rules": LogAlertRule.objects.filter(organization=organization)._raw_delete(
+                LogAlertRule.objects.db
+            ),
+            "log_sources": LogSource.objects.filter(organization=organization)._raw_delete(LogSource.objects.db),
             "comments": FindingComment.objects.filter(finding__asset__organization=organization)._raw_delete(
                 FindingComment.objects.db
             ),
