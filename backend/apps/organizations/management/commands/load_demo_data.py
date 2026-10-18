@@ -719,7 +719,7 @@ class Command(BaseCommand):
         refund_frames = [("refund", "/srv/payments/src/refunds.js", 27, 31),
                          ("Layer.handle", "/srv/payments/node_modules/express/lib/router/layer.js", 95, 5)]
 
-        office, customers = "198.51.100.10", [f"203.0.113.{n}" for n in range(20, 60)]
+        customers = [f"203.0.113.{n}" for n in range(20, 60)]
         prober, guesser = "192.0.2.150", "198.51.100.231"
         shop, payments = [], []
 

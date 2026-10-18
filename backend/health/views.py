@@ -1,8 +1,10 @@
+import os
+
+import redis
+from django.conf import settings
 from django.db import connections
 from django.db.utils import OperationalError
 from django.http import JsonResponse
-import redis
-from django.conf import settings
 
 
 def health_check(request):
@@ -17,9 +19,15 @@ def health_check(request):
     checks = {"database": _check_database(), "redis": _check_redis()}
     healthy = all(v == "ok" for v in checks.values())
     return JsonResponse(
-        {"status": "ok" if healthy else "unhealthy", "checks": checks},
+        # Which commit is running (Render sets RENDER_GIT_COMMIT): the deploy
+        # pipeline waits for it to match what it just deployed.
+        {"status": "ok" if healthy else "unhealthy", "checks": checks, "version": _version()},
         status=200 if healthy else 503,
     )
+
+
+def _version():
+    return os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT") or "unknown"
 
 
 def _check_database():

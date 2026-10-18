@@ -5,7 +5,7 @@ Parsers and decisions are tested without the network.
 """
 
 import json
-from datetime import datetime, timedelta, timezone as dt_timezone
+from datetime import datetime, timezone as dt_timezone
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
@@ -89,7 +89,7 @@ class CertTransparencyTests(SimpleTestCase):
         now = datetime(2026, 10, 17, tzinfo=dt_timezone.utc)
         le = "C=US, O=Let's Encrypt, CN=R11"
         entries = [
-            {"id": i, "issuer_name": le, "name_value": f"shop.acme.com\nwww.acme.com", "not_before": f"2026-10-0{i + 1}T00:00:00"}
+            {"id": i, "issuer_name": le, "name_value": "shop.acme.com\nwww.acme.com", "not_before": f"2026-10-0{i + 1}T00:00:00"}
             for i in range(3)
         ] + [
             {"id": 9, "issuer_name": "C=XX, O=Cheap Certs Ltd, CN=CA", "name_value": "login.acme.com",

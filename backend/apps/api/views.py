@@ -89,10 +89,9 @@ from apps.scanning.serializers import (
 )
 from apps.scanning.tasks import domain_scan_lock_key, fan_out_domain_scan, run_scan_job
 
-User = get_user_model()
-
 from .permissions import OrgScopedQuerysetMixin, require_org_role, user_can_access_org
 
+User = get_user_model()
 
 class OrganizationViewSet(OrgScopedQuerysetMixin, viewsets.ModelViewSet):
     """

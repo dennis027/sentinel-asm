@@ -1,13 +1,10 @@
 name: CI
 
+# Pull requests run this directly; pushes to main run it as the first stage
+# of the Deploy pipeline (deploy.yml), which only deploys if it passes.
 on:
-  push:
-    branches: [main]
   pull_request:
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_call:
 
 jobs:
   backend:
