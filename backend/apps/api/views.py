@@ -12,9 +12,7 @@ apps/api/permissions.py for the actual filtering logic.
 
 import uuid
 from datetime import timedelta
-from pathlib import Path
 
-from django.conf import settings
 from django.core.cache import cache
 from django.contrib.auth import get_user_model
 from django.db.models import Count, F, Max, Min, Q
@@ -78,6 +76,7 @@ from apps.organizations.serializers import (
     UpdateMemberSerializer,
 )
 from apps.organizations.verification import has_verification_record
+from apps.scanning import screenshot_store
 from apps.scanning.models import ScanJob
 from apps.scanning.plugins.registry import get_scanner, list_scanners
 from apps.scanning.serializers import (
@@ -1163,18 +1162,16 @@ class FindingViewSet(OrgScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
         another org's finding), rather than from a public /media/ URL.
         """
         finding = self.get_object()
-        relative_path = finding.raw_data.get("screenshot_path")
-        if finding.finding_type != Finding.FindingType.SCREENSHOT or not isinstance(relative_path, str):
+        if finding.finding_type != Finding.FindingType.SCREENSHOT:
+            raise Http404
+        # raw_data is scanner-written, but never trust a stored path to stay
+        # inside screenshots/ (screenshot_store refuses anything else). The
+        # file may be on disk or in object storage (R2/S3).
+        image = screenshot_store.open_image(finding.raw_data.get("screenshot_path"))
+        if image is None:
             raise Http404
 
-        screenshots_root = (Path(settings.MEDIA_ROOT) / "screenshots").resolve()
-        absolute_path = (Path(settings.MEDIA_ROOT) / relative_path).resolve()
-        # raw_data is scanner-written, but never trust a stored path to
-        # stay inside the directory it's supposed to be in.
-        if not absolute_path.is_relative_to(screenshots_root) or not absolute_path.is_file():
-            raise Http404
-
-        response = FileResponse(absolute_path.open("rb"), content_type="image/png")
+        response = FileResponse(image, content_type="image/png")
         response["Cache-Control"] = "private, max-age=300"
         return response
 

@@ -18,12 +18,10 @@ Run it again with --reset to start the demo from a clean slate.
 """
 
 import random
-import shutil
 import uuid
 from datetime import timedelta
 from pathlib import Path
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
@@ -40,6 +38,7 @@ from apps.logs.models import ErrorGroup, LogAlertRule, LogSource
 from apps.notifications.models import NotificationRule
 from apps.organizations.deletion import delete_organization
 from apps.organizations.models import Membership, Organization
+from apps.scanning import screenshot_store
 from apps.scanning.models import ScanJob
 from apps.scanning.plugins.registry import get_scanner, list_scanners
 
@@ -388,7 +387,6 @@ class Command(BaseCommand):
             Finding.objects.filter(id=finding.id).update(first_seen=now - timedelta(days=age))
 
     def _inventory(self, assets, now):
-        screenshots = Path(settings.MEDIA_ROOT) / "screenshots"
         for host, asset in assets.items():
             Finding.objects.create(
                 asset=asset, finding_type=T.SUBDOMAIN_DISCOVERED, severity=S.INFO,
@@ -397,9 +395,8 @@ class Command(BaseCommand):
             )
             image = HOSTS[host][1]
             if image and (DEMO_ASSETS / f"{image}.png").exists():
-                relative = f"screenshots/{asset.id}/demo-{image}.png"
-                (screenshots / str(asset.id)).mkdir(parents=True, exist_ok=True)
-                shutil.copy(DEMO_ASSETS / f"{image}.png", Path(settings.MEDIA_ROOT) / relative)
+                relative = screenshot_store.save(screenshot_store.path_for(asset.id, f"demo-{image}.png"),
+                                                 (DEMO_ASSETS / f"{image}.png").read_bytes())
                 title = {"www": "Acme Retail · The autumn edit", "shop": "Checkout · Acme Retail",
                          "sso": "Staff sign-in · Acme Retail", "staging": "Staging · build 4.12.0-rc3",
                          "grafana": "Grafana", "status": "Acme Retail Status"}[image]

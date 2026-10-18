@@ -6,7 +6,8 @@ same host, up to settings.SCREENSHOT_MAX_PAGES in total -- so a site
 shows up as its home page, its login page, its docs, and so on, rather
 than as a single image.
 
-Each PNG is stored under MEDIA_ROOT/screenshots/<asset_id>/ and its
+Each PNG is stored as screenshots/<asset_id>/... in the default storage
+(disk, or R2/S3 when configured; see apps/scanning/screenshot_store.py) and its
 relative path is recorded in the Finding's raw_data. The files are
 served to the UI by GET /api/findings/{id}/screenshot/ (authenticated
 and org-scoped) -- there is deliberately no public URL for them.
@@ -23,12 +24,13 @@ left on disk until a retention job exists.
 """
 
 from datetime import datetime, timezone
-from pathlib import Path
 from urllib.parse import urldefrag, urljoin, urlsplit
 
 from django.conf import settings
 
 from apps.findings.models import Finding
+
+from apps.scanning import screenshot_store
 
 from .base import BaseScanner, RawFinding
 from .registry import register_scanner
@@ -107,8 +109,6 @@ class ScreenshotScanner(BaseScanner):
 
         host = target.value
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        directory = f"screenshots/{target.id}"
-        (Path(settings.MEDIA_ROOT) / directory).mkdir(parents=True, exist_ok=True)
 
         findings: list[RawFinding] = []
         # Several links often land on the same place (everything
@@ -121,8 +121,10 @@ class ScreenshotScanner(BaseScanner):
                 return
             captured_urls.add(final_url)
 
-            relative_path = f"{directory}/{timestamp}-{len(findings):02d}.png"
-            page.screenshot(path=str(Path(settings.MEDIA_ROOT) / relative_path), full_page=False)
+            relative_path = screenshot_store.save(
+                screenshot_store.path_for(target.id, f"{timestamp}-{len(findings):02d}.png"),
+                page.screenshot(full_page=False),
+            )
             page_title = page.title()
             findings.append(
                 RawFinding(

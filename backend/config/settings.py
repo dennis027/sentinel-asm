@@ -36,6 +36,9 @@ if not SECRET_KEY:
 ALLOWED_HOSTS = env.list(
     "DJANGO_ALLOWED_HOSTS", default=["*"] if DEBUG else ["localhost", "127.0.0.1"]
 )
+# On Render, the service's own address (xyz.onrender.com) is always allowed.
+if env("RENDER_EXTERNAL_HOSTNAME", default=""):
+    ALLOWED_HOSTS.append(env("RENDER_EXTERNAL_HOSTNAME"))
 
 # How many trusted reverse proxies sit in front of the API. 0 (default)
 # means X-Forwarded-For is client-controlled and is ignored -- both for
@@ -130,6 +133,8 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django_prometheus.middleware.PrometheusBeforeMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    # The admin's and API docs' CSS/JS, from the API itself (no nginx needed).
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -298,7 +303,36 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"  
+MEDIA_ROOT = BASE_DIR / "media"
+
+# Screenshots and other uploaded files. On disk under MEDIA_ROOT by default
+# (fine when the worker and the API share a disk, as with docker compose).
+# With S3_BUCKET set they go to S3-compatible object storage instead, e.g.
+# Cloudflare R2, which the worker and the API can both reach from anywhere.
+# Files stay private: the API streams them to signed-in users.
+S3_BUCKET = env("S3_BUCKET", default="")
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
+if S3_BUCKET:
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": S3_BUCKET,
+            # R2: https://<account id>.r2.cloudflarestorage.com; empty for AWS S3.
+            "endpoint_url": env("S3_ENDPOINT_URL", default="") or None,
+            "access_key": env("S3_ACCESS_KEY_ID", default=""),
+            "secret_key": env("S3_SECRET_ACCESS_KEY", default=""),
+            # R2 uses "auto".
+            "region_name": env("S3_REGION", default="auto"),
+            "location": env("S3_PREFIX", default="media"),
+            "default_acl": None,
+            "querystring_auth": True,
+            "file_overwrite": False,
+            "signature_version": "s3v4",
+        },
+    }
 
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

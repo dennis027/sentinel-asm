@@ -9,10 +9,7 @@ and only then is the (now small) organization row itself removed.
 """
 
 import logging
-import shutil
-from pathlib import Path
 
-from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
 
@@ -26,6 +23,7 @@ def delete_organization(organization) -> dict[str, int]:
     from apps.audit_logs.models import ActivityEvent
     from apps.findings.models import Finding, FindingComment, RiskSnapshot
     from apps.logs.models import ErrorGroup, LogAlertRule, LogDetection, LogEvent, LogSource
+    from apps.scanning import screenshot_store
     from apps.scanning.models import ScanJob
     from apps.scanning.plugins.registry import list_scanners
     from apps.scanning.tasks import domain_scan_lock_key
@@ -61,9 +59,8 @@ def delete_organization(organization) -> dict[str, int]:
         organization.delete()
 
     # Only after the database commit: files can't be rolled back.
-    screenshots = Path(settings.MEDIA_ROOT) / "screenshots"
     for asset_id in asset_ids:
-        shutil.rmtree(screenshots / str(asset_id), ignore_errors=True)
+        screenshot_store.delete_for_asset(asset_id)
 
     for scanner_name in list_scanners():
         cache.delete(domain_scan_lock_key(organization_id, scanner_name))
