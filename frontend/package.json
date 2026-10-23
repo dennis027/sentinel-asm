@@ -39,7 +39,7 @@
     "@angular/compiler-cli": "^20.3.34",
     "@types/jasmine": "~5.1.0",
     "@types/jest": "^30.0.0",
-    "angular-eslint": "20.7.0",
+    "angular-eslint": "22.6.0",
     "eslint": "^9.39.1",
     "jasmine-core": "~5.9.0",
     "karma": "~6.4.0",
