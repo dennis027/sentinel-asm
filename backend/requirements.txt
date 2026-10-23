@@ -13,7 +13,7 @@ djangorestframework-simplejwt==5.5.1
 dnspython==2.8.0
 playwright==1.56.0
 django-prometheus==2.5.0
-reportlab==4.4.10
+reportlab==5.0.1
 # Screenshots in S3-compatible object storage (Cloudflare R2, S3) when configured.
 django-storages[s3]==1.14.6
 # Serves the admin's and API docs' static files from the API itself (no nginx on Render).
