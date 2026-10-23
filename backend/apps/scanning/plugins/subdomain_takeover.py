@@ -110,6 +110,8 @@ class SubdomainTakeoverScanner(BaseScanner):
     )
     applies_to = "asset"
     owned_finding_types = [Finding.FindingType.SUBDOMAIN_TAKEOVER]
+    # A dangling CNAME is exactly a name that no longer resolves.
+    needs_address = False
 
     TIMEOUT_SECONDS = 5
 

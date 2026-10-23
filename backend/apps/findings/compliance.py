@@ -97,6 +97,7 @@ MAPPING: dict[str, list[str]] = {
     T.DNS_HYGIENE: ["owasp:A05", "cis:4.1", "iso27001:A.8.9", "attack:T1557"],
     T.EXPOSED_SECRET: ["owasp:A02", "owasp:A05", "cis:3.3", "iso27001:A.8.4", "pci:3.6", "attack:T1552.001"],
     T.PUBLIC_BUCKET: ["owasp:A01", "owasp:A05", "cis:3.3", "iso27001:A.8.3", "pci:7.2", "attack:T1530"],
+    T.POLICY_VIOLATION: ["iso27001:A.8.9", "cis:4.1"],
     T.DOMAIN_REGISTRATION: ["cis:1.1", "iso27001:A.5.9", "attack:T1584.001"],
     T.UNUSUAL_CERT: ["owasp:A02", "iso27001:A.5.7", "attack:T1588.004", "attack:T1557"],
     # Inventory: evidence that the asset inventory is kept, not issues.

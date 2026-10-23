@@ -20,6 +20,12 @@ class AuthEvent(models.Model):
         TWO_FACTOR_DISABLED = "two_factor_disabled", "Two-factor sign-in turned off"
         API_KEY_CREATED = "api_key_created", "API key created"
         API_KEY_REVOKED = "api_key_revoked", "API key revoked"
+        ACCOUNT_CREATED = "account_created", "Account created"
+        PASSWORD_RESET_REQUESTED = "password_reset_requested", "Password reset requested"
+        PASSWORD_RESET = "password_reset", "Password reset"
+        EMAIL_CHANGED = "email_changed", "Email address changed"
+        PROFILE_UPDATED = "profile_updated", "Profile updated"
+        SIGNED_OUT_EVERYWHERE = "signed_out_everywhere", "Signed out on every device"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     # Nullable: a failed login with a nonexistent/wrong username has no
@@ -62,6 +68,9 @@ class ActivityEvent(models.Model):
         MEMBER_ADDED = "member_added", "Added a member"
         MEMBER_ROLE_CHANGED = "member_role_changed", "Changed a member's role"
         MEMBER_REMOVED = "member_removed", "Removed a member"
+        MEMBER_INVITED = "member_invited", "Invited someone"
+        INVITATION_REVOKED = "invitation_revoked", "Cancelled an invitation"
+        INVITATION_ACCEPTED = "invitation_accepted", "Joined through an invitation"
         SCAN_STARTED = "scan_started", "Started a scan"
         FINDING_TRIAGED = "finding_triaged", "Triaged a finding"
         FINDING_ASSIGNED = "finding_assigned", "Assigned a finding"
@@ -78,6 +87,7 @@ class ActivityEvent(models.Model):
         LOG_SOURCE_REMOVED = "log_source_removed", "Disconnected a server's logs"
         LOG_KEY_REPLACED = "log_key_replaced", "Replaced a server's ingest key"
         DETECTION_RESOLVED = "detection_resolved", "Resolved a log detection"
+        POLICY_CHANGED = "policy_changed", "Changed an attack surface policy"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     organization = models.ForeignKey(

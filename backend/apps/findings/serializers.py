@@ -4,7 +4,7 @@ from rest_framework import serializers
 from .compliance import controls_for
 from .guidance import guidance_for
 from .kev import known_exploited
-from .models import Finding, FindingComment
+from .models import Finding, FindingComment, SurfacePolicy
 from .remediation import due_at, is_overdue
 
 
@@ -130,3 +130,41 @@ class FindingCommentSerializer(serializers.ModelSerializer):
         if not value:
             raise serializers.ValidationError("Write something first.")
         return value
+
+
+class SurfacePolicySerializer(serializers.ModelSerializer):
+    kind_label = serializers.CharField(source="get_kind_display", read_only=True)
+    rule = serializers.CharField(read_only=True)
+    # Hosts breaking it right now (counted by the view).
+    breaking = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SurfacePolicy
+        fields = [
+            "id", "organization", "name", "kind", "kind_label", "value", "severity", "guidance",
+            "enabled", "rule", "breaking", "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+    def get_breaking(self, obj) -> int:
+        return self.context.get("breaking", {}).get(str(obj.id), 0)
+
+    def validate(self, attrs):
+        kind = attrs.get("kind", getattr(self.instance, "kind", None))
+        value = str(attrs.get("value", getattr(self.instance, "value", ""))).strip()
+        if kind == SurfacePolicy.Kind.PORT:
+            if not value.isdigit() or not 1 <= int(value) <= 65535:
+                raise serializers.ValidationError({"value": ["Enter a port number from 1 to 65535."]})
+            value = str(int(value))
+        elif kind == SurfacePolicy.Kind.HOSTNAME:
+            value = value.lower()
+            if not value or " " in value:
+                raise serializers.ValidationError({"value": ["Enter a name pattern such as *dev* or staging.*"]})
+        elif not value:
+            raise serializers.ValidationError({"value": ["Say what the policy is about."]})
+        if "value" in attrs or self.instance is None:
+            attrs["value"] = value
+        if self.instance is not None and "organization" in attrs and attrs["organization"] != self.instance.organization:
+            raise serializers.ValidationError({"organization": ["A policy can't move to another organization."]})
+        return attrs
+

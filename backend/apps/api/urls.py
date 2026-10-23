@@ -16,7 +16,9 @@ from .views import (
     OrganizationViewSet,
     ScanJobViewSet,
     NotificationRuleViewSet,
-    ScannerListView
+    SavedViewViewSet,
+    ScannerListView,
+    SurfacePolicyViewSet,
 )
 
 router = DefaultRouter()
@@ -25,6 +27,8 @@ router.register("assets", AssetViewSet, basename="asset")
 router.register("scan-jobs", ScanJobViewSet, basename="scanjob")
 router.register("findings", FindingViewSet, basename="finding")
 router.register("notification-rules", NotificationRuleViewSet, basename="notificationrule")
+router.register("surface-policies", SurfacePolicyViewSet, basename="surfacepolicy")
+router.register("saved-views", SavedViewViewSet, basename="savedview")
 router.register("log-sources", LogSourceViewSet, basename="logsource")
 router.register("log-events", LogEventViewSet, basename="logevent")
 router.register("log-detections", LogDetectionViewSet, basename="logdetection")

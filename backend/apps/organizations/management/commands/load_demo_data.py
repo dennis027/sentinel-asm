@@ -29,7 +29,9 @@ from django.utils import timezone
 
 from apps.assets.models import Asset, Technology
 from apps.audit_logs.models import ActivityEvent
-from apps.findings.models import Finding, FindingComment, RiskSnapshot
+from apps.assets.hosting import refresh_provider
+from apps.findings import policies
+from apps.findings.models import Finding, FindingComment, RiskSnapshot, SurfacePolicy
 from apps.findings.summary import build_risk_summary, record_snapshot
 from apps.findings import kev
 from apps.logs.detections import analyze, check_silent_sources
@@ -37,7 +39,7 @@ from apps.logs.ingest import store
 from apps.logs.models import ErrorGroup, LogAlertRule, LogSource
 from apps.notifications.models import NotificationRule
 from apps.organizations.deletion import delete_organization
-from apps.organizations.models import Membership, Organization
+from apps.organizations.models import Membership, Organization, SavedView
 from apps.scanning import screenshot_store
 from apps.scanning.models import ScanJob
 from apps.scanning.plugins.registry import get_scanner, list_scanners
@@ -279,6 +281,43 @@ COMMENTS = {
     ],
 }
 
+# host -> (status, page title, provider hint via CNAME, address); status None = no web reply.
+WEB = {
+    "": (301, "", "d1x9.cloudfront.net", "198.51.100.10"),
+    "www": (200, "Acme Retail | Shop furniture & homeware online", "d1x9.cloudfront.net", "198.51.100.10"),
+    "shop": (200, "Acme Shop", "", "203.0.113.20"),
+    "checkout": (200, "Checkout | Acme Retail", "checkout-lb.eu-west-1.elb.amazonaws.com", "198.51.100.12"),
+    "api": (404, "", "api-lb.eu-west-1.elb.amazonaws.com", "198.51.100.13"),
+    "api-v1": (200, "IIS Windows Server", "", "203.0.113.21"),
+    "sso": (302, "", "acme.okta.com.cdn.cloudflare.net", "104.18.20.5"),
+    "staging": (403, "Jenkins", "staging.your-server.de", "88.99.10.4"),
+    "dev": (200, "Welcome to nginx!", "dev.your-server.de", "88.99.10.4"),
+    "legacy": (503, "Service Unavailable", "", "203.0.113.20"),
+    "grafana": (200, "Grafana", "grafana.your-server.de", "88.99.10.5"),
+    "status": (200, "Acme Retail Status", "acme.statuspage.io.fastly.net", "151.101.1.5"),
+    "blog": (200, "Acme Retail Blog", "blog.cdn.cloudflare.net", "104.16.40.2"),
+    "docs": (200, "Acme Developer Docs", "cname.vercel-dns.com", "76.76.21.21"),
+    "cdn": (200, "", "acme.cdn.cloudflare.net", "104.16.40.3"),
+    "careers": (200, "Careers at Acme Retail", "", "198.51.100.40"),
+    "promo2023": (404, "Not Found", "acme-promo.netlify.app", "198.51.100.41"),
+    "uploads": (403, "403 Forbidden", "", "203.0.113.22"),
+    "intranet": (401, "Acme Intranet", "", "203.0.113.21"),
+    "support": (200, "Acme Retail Help Centre", "acme.zendesk.com", "198.51.100.42"),
+    "pay": (200, "Acme Pay", "pay-lb.eu-west-1.elb.amazonaws.com", "198.51.100.14"),
+    "assets": (403, "", "acme-assets.s3.amazonaws.com", "198.51.100.15"),
+    "m": (301, "", "d1x9.cloudfront.net", "198.51.100.10"),
+    "partners": (200, "Partner portal | Acme Retail", "partners-lb.eu-west-1.elb.amazonaws.com", "198.51.100.16"),
+    "git": (302, "", "git.your-server.de", "88.99.10.6"),
+    "analytics": (204, "", "ghs.googlehosted.com", "198.51.100.43"),
+    "beta": (401, "", "beta-lb.eu-west-1.elb.amazonaws.com", "198.51.100.17"),
+}
+for number in range(1, 15):
+    WEB[f"store{number:02d}"] = (200, f"Acme Retail store {number}", "stores-lb.eu-west-1.elb.amazonaws.com", "198.51.100.18")
+
+# host -> who answers for it
+OWNERS = {"shop": "brian", "checkout": "amina", "pay": "amina", "api": "brian", "api-v1": "brian",
+          "staging": "brian", "dev": "brian", "grafana": "amina", "sso": "amina", "git": "brian"}
+
 PEOPLE = [("amina", "Amina Otieno", Membership.Role.ADMIN), ("brian", "Brian Mwangi", Membership.Role.ANALYST),
           ("chloe", "Chloe Wanjiru", Membership.Role.VIEWER)]
 
@@ -334,6 +373,7 @@ class Command(BaseCommand):
             self._server_logs(organization, people, now, rng)
             self._app_logs(organization, people, now, rng)
             self._trend(organization, now, rng)
+            self._surface(organization, assets, people, now)
 
         self.stdout.write(self.style.SUCCESS(
             f"Loaded {NAME} ({DOMAIN}) with {len(assets)} assets, owned by {owner.username}. "
@@ -852,3 +892,51 @@ class Command(BaseCommand):
                     open_issues=max(18, round(48 - 26 * progress)), critical_high=max(5, round(14 - 9 * progress)),
                 ),
             )
+
+    def _surface(self, organization, assets, people, now):
+        """What scans learn about each host, owners, policies and a shared saved view."""
+        checked = (now - timedelta(hours=5)).isoformat()
+        for host, (status, title, cname, address) in WEB.items():
+            asset = assets[host]
+            server = next((name for name, _v, category in HOSTS[host][0] if category == "web-server"), "")
+            if status is not None:
+                asset.web = {
+                    "status": status, "title": title, "server": server, "checked_at": checked,
+                    "response_ms": 80 + (sum(map(ord, host)) % 400),
+                    "final_url": f"https://{asset.value}/" if status < 300 or status >= 400 else f"https://www.{DOMAIN}/",
+                }
+            asset.hosting = {"ips": [address], "cnames": [cname] if cname else [], "reverse_names": [], "checked_at": checked}
+            refresh_provider(asset)
+            owner = people.get(OWNERS.get(host, ""))
+            Asset.objects.filter(id=asset.id).update(web=asset.web, hosting=asset.hosting, owner=owner)
+        for host in ("mail", "vpn", "ftp", "db-backup", "metrics"):
+            Asset.objects.filter(id=assets[host].id).update(
+                hosting={"ips": ["203.0.113.30"], "cnames": [], "reverse_names": [], "checked_at": checked}
+            )
+        # Software that turned up recently, for the change feed.
+        Technology.objects.filter(asset=assets["grafana"]).update(first_seen=now - timedelta(days=3))
+        Technology.objects.filter(asset=assets["staging"]).update(first_seen=now - timedelta(days=9))
+
+        for name, kind, value, severity, guidance in [
+            ("No Remote Desktop on the internet", "port", "3389", "high",
+             "Put Remote Desktop behind the VPN, then close port 3389 to the internet."),
+            ("No databases on the internet", "port", "5432", "critical",
+             "Restrict the database to private networks with a firewall rule."),
+            ("No development hosts in public", "hostname", "dev.*", "medium",
+             "Put development hosts behind single sign-on or remove their public DNS records."),
+        ]:
+            SurfacePolicy.objects.create(
+                organization=organization, name=name, kind=kind, value=value, severity=severity,
+                guidance=guidance, created_by=people["amina"],
+            )
+        policies.evaluate(organization)
+
+        SavedView.objects.create(
+            organization=organization, owner=people["amina"], page=SavedView.Page.FINDINGS,
+            name="Critical and high, open", filters={"severity": "critical"}, shared=True,
+        )
+        SavedView.objects.create(
+            organization=organization, owner=people["amina"], page=SavedView.Page.ASSETS,
+            name="Our own servers", filters={"q": "provider:none"}, shared=True,
+        )
+

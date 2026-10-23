@@ -1,8 +1,10 @@
+import hashlib
 import secrets
 import uuid
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 def generate_verification_token() -> str:
@@ -140,3 +142,82 @@ class Membership(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.organization.name} ({self.role})"
+
+class Invitation(models.Model):
+    """
+    An invitation to join an organization, sent to an email address.
+
+    The link carries a random token; only its SHA-256 is stored, so the
+    database alone can't be used to accept invitations. Accepting needs
+    that link and, if the address already has an account, being signed
+    in as it: joining always takes the invited person's consent.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="invitations")
+    email = models.EmailField()
+    role = models.CharField(max_length=16, choices=Membership.Role.choices, default=Membership.Role.VIEWER)
+    token_hash = models.CharField(max_length=64, unique=True, editable=False)
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    accepted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["organization", "email"])]
+
+    def __str__(self):
+        return f"{self.email} -> {self.organization.name} ({self.role})"
+
+    @staticmethod
+    def hash_token(token: str) -> str:
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    def issue_token(self) -> str:
+        """A fresh token (shown once, in the link) and a fresh expiry; any earlier link stops working."""
+        token = secrets.token_urlsafe(32)
+        self.token_hash = self.hash_token(token)
+        self.expires_at = timezone.now() + timezone.timedelta(days=settings.INVITATION_TTL_DAYS)
+        return token
+
+    @property
+    def status(self) -> str:
+        if self.accepted_at:
+            return "accepted"
+        if self.revoked_at:
+            return "revoked"
+        if self.expires_at <= timezone.now():
+            return "expired"
+        return "pending"
+
+
+class SavedView(models.Model):
+    """
+    A named set of filters on the Findings or Assets page ("Crown jewels
+    with criticals", "Brian's hosts on AWS"). Private to whoever saved it
+    unless shared with the organization.
+    """
+
+    class Page(models.TextChoices):
+        FINDINGS = "findings", "Findings"
+        ASSETS = "assets", "Assets"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="saved_views")
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="saved_views")
+    page = models.CharField(max_length=16, choices=Page.choices)
+    name = models.CharField(max_length=80)
+    # The page's query parameters, e.g. {"severity": "critical", "q": "tag:payments"}.
+    filters = models.JSONField(default=dict)
+    shared = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]

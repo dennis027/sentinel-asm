@@ -21,3 +21,13 @@ class ScanningConfig(AppConfig):
             if module_name in ("base", "registry"):
                 continue
             importlib.import_module(f"{plugins.__name__}.{module_name}")
+
+        from celery.signals import worker_ready
+
+        worker_ready.connect(_report_worker_status, weak=False)
+
+
+def _report_worker_status(**kwargs):
+    from .tasks import report_worker_status
+
+    report_worker_status()

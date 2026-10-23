@@ -107,6 +107,7 @@ class ScanProgressSerializer(serializers.Serializer):
     running = serializers.IntegerField()
     success = serializers.IntegerField()
     failed = serializers.IntegerField()
+    skipped = serializers.IntegerField()
     finished = serializers.BooleanField()
 
 

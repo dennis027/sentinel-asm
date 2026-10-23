@@ -5,7 +5,7 @@ from rest_framework import serializers
 
 from apps.scanning.targets import validate_root_domain
 
-from .models import Membership, Organization
+from .models import Invitation, Membership, Organization, SavedView
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
@@ -152,3 +152,74 @@ class AddMemberSerializer(serializers.Serializer):
             )
         attrs["user"] = user
         return attrs
+
+
+class InvitationSerializer(serializers.ModelSerializer):
+    role_label = serializers.CharField(source="get_role_display", read_only=True)
+    status = serializers.CharField(read_only=True)
+    invited_by = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Invitation
+        fields = ["id", "email", "role", "role_label", "status", "invited_by", "created_at", "expires_at"]
+        read_only_fields = fields
+
+    def get_invited_by(self, invitation) -> str | None:
+        user = invitation.invited_by
+        return (user.get_full_name() or user.username) if user else None
+
+
+class CreateInvitationSerializer(serializers.Serializer):
+    """Input for POST /api/organizations/{id}/invitations/."""
+
+    email = serializers.EmailField()
+    role = serializers.ChoiceField(choices=Membership.Role.choices, default=Membership.Role.VIEWER)
+
+    def validate_email(self, value):
+        email = value.strip().lower()
+        organization = self.context["organization"]
+        if Membership.objects.filter(organization=organization, user__email__iexact=email).exists():
+            raise serializers.ValidationError("Someone with this address is already a member.")
+        pending = Invitation.objects.filter(
+            organization=organization, email__iexact=email, accepted_at__isnull=True, revoked_at__isnull=True,
+        )
+        if any(i.status == "pending" for i in pending):
+            raise serializers.ValidationError("This address already has an invitation waiting. Resend it instead.")
+        return email
+
+
+class SavedViewSerializer(serializers.ModelSerializer):
+    MAX_FILTERS = 20
+
+    owner_name = serializers.SerializerMethodField()
+    is_mine = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SavedView
+        fields = ["id", "organization", "page", "name", "filters", "shared", "owner_name", "is_mine", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+    def get_owner_name(self, obj) -> str:
+        return obj.owner.get_full_name() or obj.owner.username
+
+    def get_is_mine(self, obj) -> bool:
+        request = self.context.get("request")
+        return bool(request and obj.owner_id == request.user.id)
+
+    def validate_name(self, value):
+        value = " ".join(value.split())
+        if not value:
+            raise serializers.ValidationError("Give the view a name.")
+        return value
+
+    def validate_filters(self, value):
+        if not isinstance(value, dict) or len(value) > self.MAX_FILTERS:
+            raise serializers.ValidationError("Send the page's filters as name/value pairs.")
+        cleaned = {}
+        for key, item in value.items():
+            if not isinstance(key, str) or not isinstance(item, (str, int, bool)) or len(str(item)) > 300:
+                raise serializers.ValidationError("Each filter must be a short value.")
+            if str(item) != "":
+                cleaned[key[:40]] = str(item)
+        return cleaned
+

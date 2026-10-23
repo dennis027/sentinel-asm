@@ -55,6 +55,9 @@ class ScanJob(models.Model):
         RETRYING = "retrying", "Retrying"
         SUCCESS = "success", "Success"
         FAILED = "failed", "Failed"
+        # Not run because there was nothing to scan (the host no longer
+        # exists in DNS). Not a failure: nothing is wrong with the scanner.
+        SKIPPED = "skipped", "Skipped"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     organization = models.ForeignKey(

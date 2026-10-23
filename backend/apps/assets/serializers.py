@@ -24,6 +24,7 @@ class AssetSerializer(serializers.ModelSerializer):
     risk_grade = serializers.CharField(read_only=True)
     # On the organization's never-scan list.
     out_of_scope = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Asset
@@ -31,11 +32,17 @@ class AssetSerializer(serializers.ModelSerializer):
             "id", "organization", "organization_name", "asset_type", "value", "source",
             "is_active", "first_seen", "last_seen", "technologies",
             "risk_score", "risk_grade", "criticality", "tags", "out_of_scope",
+            "owner", "owner_name", "web", "hosting",
         ]
         read_only_fields = ["id", "first_seen", "last_seen"]
 
     def get_out_of_scope(self, obj) -> bool:
         return obj.organization.is_out_of_scope(obj.value)
+
+    def get_owner_name(self, obj) -> str | None:
+        if obj.owner is None:
+            return None
+        return obj.owner.get_full_name() or obj.owner.username
 
 
 class AssetUpdateSerializer(serializers.ModelSerializer):
@@ -45,7 +52,12 @@ class AssetUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Asset
-        fields = ["criticality", "tags"]
+        fields = ["criticality", "tags", "owner"]
+
+    def validate_owner(self, value):
+        if value is not None and not self.instance.organization.memberships.filter(user=value).exists():
+            raise serializers.ValidationError("The owner must be a member of this organization.")
+        return value
 
     def validate_tags(self, value):
         if not isinstance(value, list) or not all(isinstance(tag, str) for tag in value):

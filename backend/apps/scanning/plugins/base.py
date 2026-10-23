@@ -8,6 +8,7 @@ the whole point of this interface: core code is closed for
 modification, open for extension.
 """
 
+import shutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -77,6 +78,13 @@ class BaseScanner(ABC):
     category: str = "web"
     applies_to: Literal["asset", "organization"] = "asset"
     owned_finding_types: list[str] = []
+    # Asset-level scanners that connect to the host can't do anything
+    # with a name that doesn't resolve: the job is skipped instead of
+    # failing three times. DNS-only scanners (where "doesn't resolve"
+    # is itself the answer) set this to False.
+    needs_address: bool = True
+    # Programs that must be installed on the worker, checked before a scan.
+    requires_tools: list[str] = []
 
     @abstractmethod
     def run(self, target) -> list[RawFinding]:
@@ -97,4 +105,17 @@ class BaseScanner(ABC):
         called by the task layer for applies_to == "asset" scanners.
         """
         return []
-    
+
+    def extract_asset_facts(self, target) -> dict:
+        """
+        Optional. What this scanner learned about the host itself rather
+        than an issue on it -- e.g. {"web": {"status": 200, ...}} from
+        httpx, {"hosting": {"ips": [...]}} from dns_monitor. Merged into
+        the Asset's field of the same name by the task layer. Only called
+        after a successful run of an applies_to == "asset" scanner.
+        """
+        return {}
+
+    def missing_tools(self) -> list[str]:
+        """The required programs the worker doesn't have; an empty list when it can run."""
+        return [tool for tool in self.requires_tools if shutil.which(tool) is None]

@@ -3,6 +3,7 @@ from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
+from apps.api import account_views
 from apps.api.auth_views import (
     ApiKeyDetailView,
     ApiKeyListView,
@@ -41,6 +42,15 @@ urlpatterns = [
     path("api/auth/api-keys/", ApiKeyListView.as_view(), name="auth-api-keys"),
     path("api/auth/api-keys/<uuid:key_id>/", ApiKeyDetailView.as_view(), name="auth-api-key"),
     path("api/auth/sign-ins/", SignInHistoryView.as_view(), name="auth-sign-ins"),
+    path("api/auth/me/", account_views.MeView.as_view(), name="auth-me"),
+    path("api/auth/me/email/", account_views.ChangeEmailView.as_view(), name="auth-change-email"),
+    path("api/auth/sessions/revoke/", account_views.SignOutEverywhereView.as_view(), name="auth-sign-out-everywhere"),
+    path("api/auth/password-reset/", account_views.PasswordResetRequestView.as_view(), name="auth-password-reset"),
+    path("api/auth/password-reset/confirm/", account_views.PasswordResetConfirmView.as_view(),
+         name="auth-password-reset-confirm"),
+    path("api/invitations/<str:token>/", account_views.InvitationDetailView.as_view(), name="invitation-detail"),
+    path("api/invitations/<str:token>/accept/", account_views.AcceptInvitationView.as_view(), name="invitation-accept"),
+    path("api/client-errors/", account_views.ClientErrorView.as_view(), name="client-errors"),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),

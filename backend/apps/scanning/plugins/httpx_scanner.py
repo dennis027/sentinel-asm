@@ -10,13 +10,19 @@ documented trade-off, upgradeable later to the real `httpx` binary
 image size.
 """
 
+import html
+import re
+import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 
 from apps.findings.models import Finding
 
 from .base import BaseScanner, RawFinding, RawTechnology
 from .registry import register_scanner
+
+TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 
 # header -> (display name, severity if missing)
 SECURITY_HEADERS = {
@@ -40,6 +46,8 @@ class HttpxScanner(BaseScanner):
     owned_finding_types = [Finding.FindingType.MISSING_HEADER]
 
     TIMEOUT_SECONDS = 10
+    # The <title> is near the top; no need to download the whole page.
+    TITLE_BYTES = 64 * 1024
 
     def run(self, target) -> list[RawFinding]:
         headers = self._fetch_headers(target.value)
@@ -74,27 +82,51 @@ class HttpxScanner(BaseScanner):
 
         return technologies
 
+    def extract_asset_facts(self, target) -> dict:
+        self._fetch_headers(target.value)
+        page = getattr(self, "_page", None)
+        return {"web": page} if page else {}
+
     def _fetch_headers(self, host: str):
-            # Cached per instance-call to avoid double-fetching between run()
-            # and extract_technologies() within the same scan.
-            if hasattr(self, "_headers_cache") and self._headers_cache.get(host) is not None:
-                return self._headers_cache[host]
+        # Cached per instance-call to avoid double-fetching between run(),
+        # extract_technologies() and extract_asset_facts() within the same scan.
+        if getattr(self, "_headers_cache", {}).get(host) is not None:
+            return self._headers_cache[host]
 
-            url = f"https://{host}"
-            request = urllib.request.Request(url, headers={"User-Agent": "asm-platform-httpx/1.0"})
-            try:
-                with urllib.request.urlopen(request, timeout=self.TIMEOUT_SECONDS) as response:
-                    headers = response.headers
-            except urllib.error.HTTPError as exc:
-                # The server responded -- even with 403/404/5xx -- which means
-                # it's reachable and the response headers are real data, not
-                # a scan failure. WAF/bot-protection commonly 403s unrecognized
-                # clients; that's a legitimate finding, not an error to retry.
-                headers = exc.headers
-            except (urllib.error.URLError, TimeoutError) as exc:
-                # Genuine failure to reach the host at all (DNS, connection
-                # refused, timeout) -- this one IS worth retrying.
-                raise RuntimeError(f"httpx scan of {host} failed: {exc}") from exc
+        url = f"https://{host}"
+        request = urllib.request.Request(url, headers={"User-Agent": "asm-platform-httpx/1.0"})
+        started = time.monotonic()
+        try:
+            with urllib.request.urlopen(request, timeout=self.TIMEOUT_SECONDS) as response:
+                headers, status, final_url = response.headers, response.status, response.geturl()
+                body = response.read(self.TITLE_BYTES)
+        except urllib.error.HTTPError as exc:
+            # The server responded -- even with 403/404/5xx -- which means
+            # it's reachable and the response headers are real data, not
+            # a scan failure. WAF/bot-protection commonly 403s unrecognized
+            # clients; that's a legitimate finding, not an error to retry.
+            headers, status, final_url = exc.headers, exc.code, exc.geturl() or url
+            body = exc.read(self.TITLE_BYTES) if exc.fp else b""
+        except (urllib.error.URLError, TimeoutError) as exc:
+            # Genuine failure to reach the host at all (DNS, connection
+            # refused, timeout) -- this one IS worth retrying.
+            raise RuntimeError(f"httpx scan of {host} failed: {exc}") from exc
 
-            self._headers_cache = {host: headers}
-            return headers
+        self._page = {
+            "status": status,
+            "title": page_title(body),
+            "final_url": final_url,
+            "response_ms": round((time.monotonic() - started) * 1000),
+            "server": headers.get("Server", "") or "",
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._headers_cache = {host: headers}
+        return headers
+
+
+def page_title(body: bytes) -> str:
+    """The <title> of an HTML page, tidied; "" when there isn't one."""
+    match = TITLE_RE.search(body.decode("utf-8", errors="replace"))
+    if not match:
+        return ""
+    return " ".join(html.unescape(match.group(1)).split())[:200]

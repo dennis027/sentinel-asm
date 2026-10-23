@@ -28,6 +28,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.assets.models import Asset
+from apps.assets.overview import build_getting_started, build_hosting
+from apps.assets.query import apply_query
 from apps.assets.serializers import (
     AssetBulkCreateSerializer,
     AssetCreateSerializer,
@@ -35,8 +37,11 @@ from apps.assets.serializers import (
     AssetUpdateSerializer,
 )
 from apps.assets.utils import ensure_root_domain_asset
+from apps.findings import policies
+from apps.findings.emerging import build_emerging_threats
 from apps.findings.filters import FindingFilter
-from apps.findings.models import Finding
+from apps.findings.models import Finding, SurfacePolicy
+from apps.findings.surface_changes import build_surface_changes
 from apps.findings.reports import generate_csv, generate_executive_report, generate_json, generate_pdf
 from apps.findings.compliance import build_compliance
 from apps.findings.insights import (
@@ -63,21 +68,26 @@ from apps.findings.serializers import (
     FindingCommentSerializer,
     FindingSerializer,
     FindingTriageSerializer,
+    SurfacePolicySerializer,
 )
 from apps.notifications.models import NotificationRule
 from apps.notifications.tasks import send_test_alert, send_weekly_report
 from apps.notifications.serializers import NotificationRuleSerializer
-from apps.organizations.models import Membership, Organization
+from apps.organizations.models import Invitation, Membership, Organization, SavedView
 from apps.organizations.deletion import delete_organization
 from apps.organizations.serializers import (
     AddMemberSerializer,
+    CreateInvitationSerializer,
+    InvitationSerializer,
     MembershipSerializer,
     OrganizationSerializer,
+    SavedViewSerializer,
     UpdateMemberSerializer,
 )
 from apps.organizations.verification import has_verification_record
 from apps.scanning import screenshot_store
 from apps.scanning.models import ScanJob
+from apps.scanning.preflight import build_preflight
 from apps.scanning.plugins.registry import get_scanner, list_scanners
 from apps.scanning.serializers import (
     DomainScanStartedSerializer,
@@ -87,8 +97,9 @@ from apps.scanning.serializers import (
     ScanProgressSerializer,
     person,
 )
-from apps.scanning.tasks import domain_scan_lock_key, fan_out_domain_scan, run_scan_job
+from apps.scanning.tasks import assign_to_owners, domain_scan_lock_key, fan_out_domain_scan, run_scan_job
 
+from . import emails
 from .permissions import OrgScopedQuerysetMixin, require_org_role, user_can_access_org
 
 User = get_user_model()
@@ -233,6 +244,9 @@ class OrganizationViewSet(OrgScopedQuerysetMixin, viewsets.ModelViewSet):
 
         if request.method == "DELETE":
             membership.delete()
+            # What they owned goes back to nobody; their private views go with them.
+            organization.assets.filter(owner=membership.user).update(owner=None)
+            SavedView.objects.filter(organization=organization, owner=membership.user).delete()
             record_activity(
                 request.user, organization, ActivityEvent.Verb.MEMBER_REMOVED,
                 "Left the organization" if leaving else f"Removed {membership.user.username}",
@@ -246,6 +260,78 @@ class OrganizationViewSet(OrgScopedQuerysetMixin, viewsets.ModelViewSet):
             f"Made {membership.user.username} {membership.get_role_display()}",
         )
         return Response(MembershipSerializer(membership).data)
+
+    @extend_schema(methods=["get"], responses={200: InvitationSerializer(many=True)})
+    @extend_schema(methods=["post"], request=CreateInvitationSerializer, responses={201: InvitationSerializer})
+    @action(detail=True, methods=["get", "post"], pagination_class=None)
+    def invitations(self, request, pk=None):
+        """
+        GET  /api/organizations/{id}/invitations/   -- invitations still waiting (Admin or higher)
+        POST /api/organizations/{id}/invitations/   {"email": "...", "role": "analyst"} (Admin or higher)
+
+        Emails the person a link to join. The response also carries the link
+        (`invite_link`) -- the only time it can be seen, since only a hash is
+        kept -- so it can be shared another way if email isn't set up. Only an
+        Owner can invite an Owner.
+        """
+        organization = self.get_object()
+        require_org_role(request.user, organization, Membership.Role.ADMIN)
+        if request.method == "GET":
+            waiting = [i for i in organization.invitations.select_related("invited_by").filter(
+                accepted_at__isnull=True, revoked_at__isnull=True) if i.status == "pending"]
+            return Response(InvitationSerializer(waiting, many=True).data)
+
+        serializer = CreateInvitationSerializer(data=request.data, context={"organization": organization})
+        serializer.is_valid(raise_exception=True)
+        self._require_owner_to_grant_owner(organization, serializer.validated_data["role"])
+        invitation = Invitation(organization=organization, invited_by=request.user, **serializer.validated_data)
+        token = invitation.issue_token()
+        invitation.save()
+        sent = emails.send_invitation(invitation, token)
+        record_activity(
+            request.user, organization, ActivityEvent.Verb.MEMBER_INVITED,
+            f"Invited {invitation.email} as {invitation.get_role_display()}",
+        )
+        return Response(
+            {**InvitationSerializer(invitation).data, "invite_link": emails.invitation_link(token), "email_sent": sent},
+            status=status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(methods=["delete"], responses={204: None})
+    @action(detail=True, methods=["delete"], url_path=r"invitations/(?P<invitation_id>[0-9a-f-]{36})")
+    def invitation(self, request, pk=None, invitation_id=None):
+        """DELETE /api/organizations/{id}/invitations/{invitation_id}/ -- cancels it; the link stops working."""
+        organization = self.get_object()
+        require_org_role(request.user, organization, Membership.Role.ADMIN)
+        invitation = organization.invitations.filter(id=invitation_id, accepted_at__isnull=True).first()
+        if invitation is None:
+            raise Http404
+        self._require_owner_to_grant_owner(organization, invitation.role)
+        invitation.revoked_at = timezone.now()
+        invitation.save(update_fields=["revoked_at"])
+        record_activity(request.user, organization, ActivityEvent.Verb.INVITATION_REVOKED,
+                        f"Cancelled the invitation for {invitation.email}")
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(request=None, responses={200: InvitationSerializer})
+    @action(detail=True, methods=["post"], url_path=r"invitations/(?P<invitation_id>[0-9a-f-]{36})/resend")
+    def resend_invitation(self, request, pk=None, invitation_id=None):
+        """
+        POST /api/organizations/{id}/invitations/{invitation_id}/resend/
+        A new link and a new expiry, emailed again; the old link stops working.
+        """
+        organization = self.get_object()
+        require_org_role(request.user, organization, Membership.Role.ADMIN)
+        invitation = organization.invitations.filter(
+            id=invitation_id, accepted_at__isnull=True, revoked_at__isnull=True).first()
+        if invitation is None:
+            raise Http404
+        self._require_owner_to_grant_owner(organization, invitation.role)
+        token = invitation.issue_token()
+        invitation.save(update_fields=["token_hash", "expires_at"])
+        sent = emails.send_invitation(invitation, token)
+        return Response({**InvitationSerializer(invitation).data, "invite_link": emails.invitation_link(token),
+                         "email_sent": sent})
 
     def _require_owner_to_grant_owner(self, organization, role) -> None:
         if role == Membership.Role.OWNER:
@@ -432,6 +518,12 @@ class OrganizationViewSet(OrgScopedQuerysetMixin, viewsets.ModelViewSet):
                     "id": asset_id, "value": value, "risk_score": 100, "risk_grade": "A+",
                     "open_findings": 0, "critical_high": 0, "clean": True,
                 })
+        # Who hosts each one, so the map can be arranged by provider.
+        providers = dict(
+            organization.assets.filter(id__in=[node["id"] for node in nodes]).values_list("id", "hosting__provider")
+        )
+        for node in nodes:
+            node["provider"] = providers.get(node["id"]) or ""
         total = organization.assets.filter(is_active=True).count()
         return Response({
             "root_domain": organization.root_domain,
@@ -505,6 +597,64 @@ class OrganizationViewSet(OrgScopedQuerysetMixin, viewsets.ModelViewSet):
         return Response(build_changes(organization, self._days(request)))
 
     @extend_schema(
+        parameters=[OpenApiParameter("scanners", OpenApiTypes.STR, description="Comma-separated; all when empty")],
+        responses={200: OpenApiTypes.OBJECT},
+    )
+    @action(detail=True, methods=["get"])
+    def preflight(self, request, pk=None):
+        """
+        GET /api/organizations/{id}/preflight/?scanners=nmap,httpx
+        The check before a scan: hosts in scope, which still exist in DNS,
+        whether each scanner can run, and roughly how long it will take.
+        """
+        organization = self.get_object()
+        names = [name for name in request.query_params.get("scanners", "").split(",") if name]
+        unknown = sorted(set(names) - set(list_scanners()))
+        if unknown:
+            raise ValidationError({"scanners": [f"No scanner called {', '.join(unknown)}."]})
+        return Response(build_preflight(organization, names or None))
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("days", OpenApiTypes.INT, default=30, description="1 to 90"),
+            OpenApiParameter("kind", OpenApiTypes.STR, description="Only one kind of change"),
+        ],
+        responses={200: OpenApiTypes.OBJECT},
+    )
+    @action(detail=True, methods=["get"], url_path="surface-changes")
+    def surface_changes(self, request, pk=None):
+        """
+        GET /api/organizations/{id}/surface-changes/?days=30
+        What appeared on and disappeared from the attack surface, host by
+        host and newest first: hosts, ports, software, certificates, DNS.
+        """
+        organization = self.get_object()
+        return Response(build_surface_changes(organization, self._days(request, 30), request.query_params.get("kind")))
+
+    @extend_schema(
+        parameters=[OpenApiParameter("days", OpenApiTypes.INT, default=90, description="1 to 90")],
+        responses={200: OpenApiTypes.OBJECT},
+    )
+    @action(detail=True, methods=["get"], url_path="emerging-threats")
+    def emerging_threats(self, request, pk=None):
+        """
+        GET /api/organizations/{id}/emerging-threats/
+        Vulnerabilities recently confirmed as exploited (CISA KEV) in
+        software this organization runs.
+        """
+        return Response(build_emerging_threats(self.get_object(), self._days(request, 90)))
+
+    @action(detail=True, methods=["get"])
+    def hosting(self, request, pk=None):
+        """GET /api/organizations/{id}/hosting/ -- hosts grouped by who hosts them."""
+        return Response(build_hosting(self.get_object()))
+
+    @action(detail=True, methods=["get"], url_path="getting-started")
+    def getting_started(self, request, pk=None):
+        """GET /api/organizations/{id}/getting-started/ -- the setup steps, and which are done."""
+        return Response(build_getting_started(self.get_object(), request.user))
+
+    @extend_schema(
         parameters=[OpenApiParameter("days", OpenApiTypes.INT, default=7, description="1 to 90")],
         responses={200: OpenApiTypes.BINARY},
     )
@@ -535,30 +685,35 @@ class OrganizationViewSet(OrgScopedQuerysetMixin, viewsets.ModelViewSet):
         return response
 
     @staticmethod
-    def _days(request) -> int:
+    def _days(request, default: int = 7) -> int:
         try:
-            return min(90, max(1, int(request.query_params.get("days", 7))))
+            return min(90, max(1, int(request.query_params.get("days", default))))
         except ValueError:
-            return 7
+            return default
 
 
 class AssetFilter(django_filters.FilterSet):
     # tag=payments -> assets carrying that label
     tag = django_filters.CharFilter(method="filter_tag")
+    # q=tech:nginx provider:aws payments -> see apps.assets.query
+    q = django_filters.CharFilter(method="filter_query")
 
     class Meta:
         model = Asset
-        fields = ["organization", "asset_type", "is_active", "source", "criticality"]
+        fields = ["organization", "asset_type", "is_active", "source", "criticality", "owner"]
 
     def filter_tag(self, queryset, name, value):
         return queryset.filter(tags__contains=[value.strip().lower()])
+
+    def filter_query(self, queryset, name, value):
+        return apply_query(queryset, value, self.request.user)
 
 
 class AssetViewSet(
     OrgScopedQuerysetMixin, mixins.CreateModelMixin, mixins.UpdateModelMixin, viewsets.ReadOnlyModelViewSet
 ):
     queryset = (
-        Asset.objects.select_related("organization")
+        Asset.objects.select_related("organization", "owner")
         .prefetch_related("technologies")
         .with_scoring_findings()
     )
@@ -592,6 +747,9 @@ class AssetViewSet(
             changes.append(f"importance {asset.get_criticality_display().lower()}")
         if "tags" in serializer.validated_data:
             changes.append("labels " + (", ".join(asset.tags) or "none"))
+        if "owner" in serializer.validated_data:
+            owner = asset.owner
+            changes.append("owner " + ((owner.get_full_name() or owner.username) if owner else "nobody"))
         record_activity(
             request.user, asset.organization, ActivityEvent.Verb.ASSET_UPDATED,
             f"Set {asset.value}'s " + " and ".join(changes),
@@ -690,6 +848,7 @@ class ScanJobViewSet(OrgScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
                 jobs=Count("id"),
                 succeeded=Count("id", filter=Q(status=ScanJob.Status.SUCCESS)),
                 failed=Count("id", filter=Q(status=ScanJob.Status.FAILED)),
+                skipped=Count("id", filter=Q(status=ScanJob.Status.SKIPPED)),
                 unfinished=Count("id", filter=Q(status__in=unfinished)),
                 scanners=Count("scanner_name", distinct=True),
                 hosts=Count("asset", distinct=True),
@@ -732,12 +891,54 @@ class ScanJobViewSet(OrgScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
                 "jobs": run["jobs"],
                 "succeeded": run["succeeded"],
                 "failed": run["failed"],
+                "skipped": run["skipped"],
                 "unfinished": run["unfinished"],
                 "new_findings": new_findings.get(run["run_id"], 0),
                 "started": run["started"],
                 "finished": run["finished"] if not run["unfinished"] else None,
             })
         return paginator.get_paginated_response(results)
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("organization", OpenApiTypes.UUID, required=True),
+            OpenApiParameter("run_id", OpenApiTypes.UUID, required=True),
+        ],
+        responses={200: OpenApiTypes.OBJECT},
+    )
+    @action(detail=False, methods=["get"], filter_backends=[], pagination_class=None)
+    def reasons(self, request):
+        """
+        GET /api/scan-jobs/reasons/?organization=<uuid>&run_id=<uuid>
+        Why a run's scans failed or were skipped, grouped: "43 x the host
+        doesn't resolve" rather than 43 separate errors. Most common first.
+        """
+        params = request.query_params
+        try:
+            organization, run_id = uuid.UUID(params.get("organization", "")), uuid.UUID(params.get("run_id", ""))
+        except ValueError:
+            raise ValidationError({"run_id": ["Give the organization and the run."]})
+        jobs = (
+            super().get_queryset()
+            .filter(organization_id=organization, run_id=run_id, status__in=[ScanJob.Status.FAILED, ScanJob.Status.SKIPPED])
+            .values_list("status", "scanner_name", "error_message", "asset__value")
+        )
+        labels = {name: get_scanner(name).label or name for name in list_scanners()}
+        groups: dict[tuple, dict] = {}
+        for job_status, scanner_name, message, host in jobs:
+            reason = (message or "No reason was recorded.").strip().splitlines()[0]
+            if host:
+                reason = reason.replace(f"http://{host}/", "the host").replace(f"https://{host}/", "the host").replace(host, "the host")
+            group = groups.setdefault((job_status, reason[:300]), {
+                "status": job_status, "reason": reason[:300], "count": 0, "scanners": [], "hosts": [],
+            })
+            group["count"] += 1
+            label = labels.get(scanner_name, scanner_name)
+            if label not in group["scanners"]:
+                group["scanners"].append(label)
+            if host and len(group["hosts"]) < 5:
+                group["hosts"].append(host)
+        return Response(sorted(groups.values(), key=lambda group: -group["count"]))
 
     @action(detail=False, methods=["post"])
     def trigger(self, request):
@@ -816,7 +1017,7 @@ class ScanJobViewSet(OrgScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
             ),
         )
 
-        if created or scan_job.status == ScanJob.Status.FAILED:
+        if created or scan_job.status in (ScanJob.Status.FAILED, ScanJob.Status.SKIPPED):
             run_scan_job.delay(str(scan_job.id))
             record_activity(
                 request.user, data["organization"], ActivityEvent.Verb.SCAN_STARTED,
@@ -936,15 +1137,17 @@ class ScanJobViewSet(OrgScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
             )
             success = status_counts.get(ScanJob.Status.SUCCESS, 0)
             failed = status_counts.get(ScanJob.Status.FAILED, 0)
+            skipped = status_counts.get(ScanJob.Status.SKIPPED, 0)
             result.append({
                 "scanner_name": scanner_name,
                 "batch_id": row["batch_id"],
                 "started_at": row["started_at"],
-                "total": pending + running + success + failed,
+                "total": pending + running + success + failed + skipped,
                 "pending": pending,
                 "running": running,
                 "success": success,
                 "failed": failed,
+                "skipped": skipped,
                 "finished": pending + running == 0,
             })
         return Response(ScanProgressSerializer(result, many=True).data)
@@ -1270,3 +1473,101 @@ class NotificationRuleViewSet(OrgScopedQuerysetMixin, viewsets.ModelViewSet):
         require_org_role(request.user, rule.organization, Membership.Role.ADMIN)
         delivered, detail = send_test_alert(rule)
         return Response({"delivered": delivered, "detail": detail})
+
+
+class SurfacePolicyViewSet(OrgScopedQuerysetMixin, viewsets.ModelViewSet):
+    """
+    /api/surface-policies/?organization=<uuid>
+    Rules for what the attack surface may look like. Anyone in the
+    organization can read them; admins and owners change them. Every
+    change re-checks the organization's hosts straight away.
+    """
+
+    queryset = SurfacePolicy.objects.select_related("organization")
+    serializer_class = SurfacePolicySerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["organization", "kind", "enabled"]
+    org_field = "organization"
+    pagination_class = None
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if self.action in ("list", "retrieve"):
+            # Hosts breaking each policy right now, in one query.
+            open_breaches = Finding.objects.filter(
+                finding_type=Finding.FindingType.POLICY_VIOLATION, is_active=True,
+                asset__organization__in=self.get_queryset().values("organization"),
+            )
+            context["breaking"] = dict(
+                open_breaches.order_by().values_list("raw_data__policy_id").annotate(count=Count("id"))
+            )
+        return context
+
+    def _changed(self, policy, summary):
+        record_activity(self.request.user, policy.organization, ActivityEvent.Verb.POLICY_CHANGED, summary)
+        created = policies.evaluate(policy.organization)
+        if created:
+            assign_to_owners(created)
+
+    def perform_create(self, serializer):
+        organization = serializer.validated_data["organization"]
+        if not user_can_access_org(self.request.user, organization):
+            raise PermissionDenied("You are not a member of this organization.")
+        require_org_role(self.request.user, organization, Membership.Role.ADMIN)
+        policy = serializer.save(created_by=self.request.user)
+        self._changed(policy, f"Added the policy '{policy.name}' ({policy.rule})")
+
+    def perform_update(self, serializer):
+        require_org_role(self.request.user, serializer.instance.organization, Membership.Role.ADMIN)
+        policy = serializer.save()
+        state = "" if policy.enabled else " (turned off)"
+        self._changed(policy, f"Changed the policy '{policy.name}'{state}")
+
+    def perform_destroy(self, instance):
+        require_org_role(self.request.user, instance.organization, Membership.Role.ADMIN)
+        organization, name = instance.organization, instance.name
+        instance.delete()
+        record_activity(self.request.user, organization, ActivityEvent.Verb.POLICY_CHANGED, f"Deleted the policy '{name}'")
+        # Its findings are resolved by the re-check: the policy no longer exists.
+        policies.evaluate(organization)
+
+
+class SavedViewViewSet(OrgScopedQuerysetMixin, viewsets.ModelViewSet):
+    """
+    /api/saved-views/?organization=<uuid>&page=findings
+    Named filters for the Findings and Assets pages: your own, plus the
+    ones teammates shared. Only the person who saved a view can change
+    it; admins can also delete shared ones.
+    """
+
+    queryset = SavedView.objects.select_related("organization", "owner")
+    serializer_class = SavedViewSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["organization", "page"]
+    org_field = "organization"
+    pagination_class = None
+
+    def get_queryset(self):
+        return super().get_queryset().filter(Q(owner=self.request.user) | Q(shared=True))
+
+    def perform_create(self, serializer):
+        organization = serializer.validated_data["organization"]
+        if not user_can_access_org(self.request.user, organization):
+            raise PermissionDenied("You are not a member of this organization.")
+        if SavedView.objects.filter(organization=organization, owner=self.request.user).count() >= 50:
+            raise ValidationError({"name": ["You have 50 saved views here; delete one first."]})
+        serializer.save(owner=self.request.user)
+
+    def perform_update(self, serializer):
+        if serializer.instance.owner_id != self.request.user.id:
+            raise PermissionDenied("Only the person who saved this view can change it.")
+        if serializer.validated_data.get("organization", serializer.instance.organization) != serializer.instance.organization:
+            raise ValidationError({"organization": ["A view can't move to another organization."]})
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.owner_id != self.request.user.id:
+            if not instance.shared:
+                raise PermissionDenied("Only the person who saved this view can delete it.")
+            require_org_role(self.request.user, instance.organization, Membership.Role.ADMIN)
+        instance.delete()

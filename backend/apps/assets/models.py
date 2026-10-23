@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.db import models
 
 from apps.organizations.models import Organization
@@ -65,6 +66,18 @@ class Asset(models.Model):
     criticality = models.CharField(max_length=16, choices=Criticality.choices, default=Criticality.NORMAL)
     # Short free-form labels such as "payments", "production", "agency".
     tags = models.JSONField(blank=True, default=list)
+
+    # The person who answers for this host. New issues found on it are
+    # assigned to them automatically.
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="owned_assets",
+    )
+
+    # What scans learned about the host itself, refreshed on every run:
+    # web = {"status", "title", "final_url", "response_ms", "server", "checked_at"} (httpx)
+    # hosting = {"ips", "cnames", "reverse_names", "provider", "checked_at"} (dns_monitor)
+    web = models.JSONField(blank=True, default=dict)
+    hosting = models.JSONField(blank=True, default=dict)
 
     is_active = models.BooleanField(
         default=True,

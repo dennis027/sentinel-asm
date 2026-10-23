@@ -40,6 +40,7 @@ class NucleiScanner(BaseScanner):
     )
     applies_to = "asset"
     owned_finding_types = [Finding.FindingType.NUCLEI_MATCH]
+    requires_tools = ["nuclei"]
 
     TEMPLATES_DIR = "/opt/nuclei-templates"
     TIMEOUT_SECONDS = 600  # full template set against one host is slow

@@ -79,6 +79,7 @@ class Finding(models.Model):
         EXPOSED_SECRET = "exposed_secret", "Secret in public code"
         PUBLIC_BUCKET = "public_bucket", "Public cloud storage"
         DOMAIN_REGISTRATION = "domain_registration", "Domain registration"
+        POLICY_VIOLATION = "policy_violation", "Breaks a policy"
 
     class Severity(models.TextChoices):
         INFO = "info", "Info"
@@ -293,3 +294,52 @@ class KnownExploitedVulnerability(models.Model):
 
     def __str__(self):
         return f"{self.cve_id} {self.name}"
+
+
+class SurfacePolicy(models.Model):
+    """
+    A rule a team sets for what its attack surface may look like ("no RDP
+    on the internet", "nothing on Heroku", "no host names with 'dev'").
+    Every host that breaks it gets a "Breaks a policy" finding, which is
+    resolved once the host complies or the policy is turned off.
+    """
+
+    class Kind(models.TextChoices):
+        PORT = "port", "Port must not be open"
+        TECHNOLOGY = "technology", "Software must not be used"
+        HOSTNAME = "hostname", "Host names must not match"
+        PROVIDER = "provider", "Must not be hosted on"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(
+        "organizations.Organization", on_delete=models.CASCADE, related_name="surface_policies"
+    )
+    name = models.CharField(max_length=120)
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    # A port number, a software name, a host name pattern (* wildcards)
+    # or a hosting provider, depending on `kind`.
+    value = models.CharField(max_length=120)
+    severity = models.CharField(max_length=16, choices=Finding.Severity.choices, default=Finding.Severity.MEDIUM)
+    # What to do about it, shown on each finding.
+    guidance = models.TextField(blank=True, default="")
+    enabled = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.organization})"
+
+    @property
+    def rule(self) -> str:
+        """The rule as a sentence, e.g. "port 3389 must not be open"."""
+        return {
+            self.Kind.PORT: f"port {self.value} must not be open",
+            self.Kind.TECHNOLOGY: f"{self.value} must not be used",
+            self.Kind.HOSTNAME: f"no host name may match {self.value}",
+            self.Kind.PROVIDER: f"nothing may be hosted on {self.value}",
+        }[self.kind]

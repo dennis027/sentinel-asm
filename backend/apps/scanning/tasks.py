@@ -14,9 +14,11 @@ from django.core.cache import cache
 from django.db.models import F, Q
 from django.utils import timezone
 
+from apps.assets.hosting import refresh_provider
 from apps.assets.models import Asset, Technology
 from apps.audit_logs.activity import record as record_activity
 from apps.audit_logs.models import ActivityEvent
+from apps.findings import policies
 from apps.findings.models import Finding
 from apps.notifications.tasks import notify_new_findings
 from apps.organizations.models import Organization
@@ -24,7 +26,7 @@ from apps.organizations.models import Organization
 from .metrics import FINDINGS_CREATED_TOTAL, SCAN_JOB_DURATION_SECONDS, SCAN_JOBS_TOTAL
 from .models import ScanJob
 from .plugins.registry import get_scanner, list_scanners
-from .targets import TargetNotAllowed, assert_public_target
+from .targets import TargetNotAllowed, TargetUnreachable, assert_public_target
 
 logger = logging.getLogger("apps.scanning")
 
@@ -71,7 +73,7 @@ def run_scan_job(self, scan_job_id: str):
                 )
             # Org-level scanners (subfinder) are passive lookups that
             # never connect to the target; asset-level ones do.
-            assert_public_target(scan_job.asset.value)
+            assert_public_target(scan_job.asset.value, needs_address=getattr(scanner, "needs_address", True))
         raw_findings = scanner.run(target)
 
         # (asset_id, dedupe_key) pairs actually produced this run -- used
@@ -181,6 +183,17 @@ def run_scan_job(self, scan_job_id: str):
                     version=raw_tech.version,
                     defaults={"category": raw_tech.category},
                 )
+            extract_facts = getattr(scanner, "extract_asset_facts", None)
+            if extract_facts:
+                apply_asset_facts(scan_job.asset, extract_facts(scan_job.asset))
+
+        # Policies can depend on what this run just learned (a port, the
+        # software, the hosting); an org-level run may have added hosts.
+        newly_created_finding_ids += policies.evaluate(
+            scan_job.organization, [scan_job.asset_id] if scanner.applies_to == "asset" else None
+        )
+        if newly_created_finding_ids:
+            assign_to_owners(newly_created_finding_ids)
 
         scan_job.status = ScanJob.Status.SUCCESS
         scan_job.finished_at = timezone.now()
@@ -202,6 +215,20 @@ def run_scan_job(self, scan_job_id: str):
 
         if newly_created_finding_ids:
             notify_new_findings.delay(str(scan_job.id), newly_created_finding_ids)
+
+    except TargetUnreachable as exc:
+        # Nothing to scan: the name is gone from DNS. Recorded as skipped
+        # rather than failed, so a run over many stale hosts doesn't read
+        # as the scanner being broken -- and no retries.
+        scan_job.status = ScanJob.Status.SKIPPED
+        scan_job.error_message = str(exc)
+        scan_job.finished_at = timezone.now()
+        scan_job.save(update_fields=["status", "error_message", "finished_at"])
+        SCAN_JOBS_TOTAL.labels(scanner_name=scan_job.scanner_name, status="skipped").inc()
+        logger.info(
+            "scan_job_skipped",
+            extra={"scan_job_id": str(scan_job.id), "scanner_name": scan_job.scanner_name, "error": str(exc)},
+        )
 
     except TargetNotAllowed as exc:
         # A policy refusal, not a transient failure -- retrying can't
@@ -255,6 +282,33 @@ def run_scan_job(self, scan_job_id: str):
                 },
             )
         raise self.retry(exc=exc)
+
+
+def apply_asset_facts(asset, facts: dict) -> None:
+    """Stores what a scanner learned about the host itself (see BaseScanner.extract_asset_facts)."""
+    if not isinstance(facts, dict):
+        return
+    changed = [name for name in ("web", "hosting") if isinstance(facts.get(name), dict)]
+    if not changed:
+        return
+    for name in changed:
+        setattr(asset, name, facts[name])
+    refresh_provider(asset)
+    Asset.objects.filter(id=asset.id).update(web=asset.web, hosting=asset.hosting)
+
+
+def assign_to_owners(finding_ids: list[str]) -> None:
+    """New issues on a host with an owner go straight to that person."""
+    rows = (
+        Finding.objects.filter(id__in=finding_ids, assignee__isnull=True, asset__owner__isnull=False)
+        .exclude(finding_type__in=Finding.INVENTORY_TYPES)
+        .values_list("id", "asset__owner_id")
+    )
+    by_owner: dict[int, list] = {}
+    for finding_id, owner_id in rows:
+        by_owner.setdefault(owner_id, []).append(finding_id)
+    for owner_id, ids in by_owner.items():
+        Finding.objects.filter(id__in=ids).update(assignee_id=owner_id)
 
 
 @shared_task
@@ -426,3 +480,52 @@ def _create_and_enqueue(jobs: list[ScanJob]) -> int:
         run_scan_job.delay(str(job.id))
     return len(jobs)
 
+
+
+WORKER_STATUS_KEY = "scanning:worker-status"
+# A little over two report intervals: one missed beat isn't "no worker".
+WORKER_STATUS_SECONDS = 30 * 60
+
+
+@shared_task
+def report_worker_status():
+    """
+    Runs ON the scan worker (every few minutes, and when it starts): says
+    it is alive and which scanners it can't run for lack of a program.
+    The API reads this for the check before a scan, since the API's own
+    image doesn't have nmap or nuclei installed.
+    """
+    missing = {}
+    for name in list_scanners():
+        if tools := get_scanner(name)().missing_tools():
+            missing[name] = tools
+    cache.set(
+        WORKER_STATUS_KEY,
+        {"seen_at": timezone.now().isoformat(), "missing_tools": missing},
+        WORKER_STATUS_SECONDS,
+    )
+
+
+@shared_task
+def purge_old_scan_jobs():
+    """
+    Deletes finished scan jobs older than SCAN_JOB_RETENTION_DAYS (0 keeps
+    them). Findings stay: they only lose the link to the scan that last
+    confirmed them. Unfinished jobs are never touched. In batches, so a
+    large backlog doesn't hold one long transaction.
+    """
+    days = settings.SCAN_JOB_RETENTION_DAYS
+    if days <= 0:
+        return "Scan job retention is off."
+    cutoff = timezone.now() - timedelta(days=days)
+    finished = ScanJob.objects.filter(
+        created_at__lt=cutoff, status__in=[ScanJob.Status.SUCCESS, ScanJob.Status.FAILED]
+    )
+    deleted = 0
+    while True:
+        ids = list(finished.values_list("id", flat=True)[:5000])
+        if not ids:
+            break
+        deleted += ScanJob.objects.filter(id__in=ids).delete()[0]
+    logger.info("scan_jobs_purged", extra={"deleted": deleted, "older_than_days": days})
+    return f"Deleted {deleted} scan job(s) older than {days} days."

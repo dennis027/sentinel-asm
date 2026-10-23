@@ -26,6 +26,7 @@ class SubfinderScanner(BaseScanner):
     )
     applies_to = "organization"
     owned_finding_types = [Finding.FindingType.SUBDOMAIN_DISCOVERED]
+    requires_tools = ["subfinder"]
 
     TIMEOUT_SECONDS = 180
 

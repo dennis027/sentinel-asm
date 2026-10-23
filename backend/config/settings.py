@@ -100,6 +100,9 @@ SCREENSHOT_MAX_PAGES = env.int("ASM_SCREENSHOT_MAX_PAGES", default=6)
 # marked failed by reap_stale_scan_jobs. Must stay above
 # CELERY_TASK_TIME_LIMIT below.
 SCAN_JOB_STALE_AFTER_MINUTES = env.int("ASM_SCAN_JOB_STALE_AFTER_MINUTES", default=30)
+# Finished scan jobs older than this are deleted nightly (findings are kept;
+# they only lose the link to the scan that last saw them). 0 keeps them forever.
+SCAN_JOB_RETENTION_DAYS = env.int("ASM_SCAN_JOB_RETENTION_DAYS", default=90)
 
 
 # ---- Applications -----------------------------------------------------
@@ -228,13 +231,40 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 25,
     "NUM_PROXIES": NUM_PROXIES,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    # Brute-force protection on login: 5 attempts per minute per IP.
-    # Scoped specifically to LoginView (throttle_scope="login") rather
-    # than a blanket rate on every endpoint.
+    # Every endpoint: a ceiling per signed-in user (or API key's user) and
+    # per address for anonymous calls, so one script or a leaked key can't
+    # hammer the API. Generous enough for the live-updating pages (the log
+    # search polls every 3 s). Log ingest is a plain Django view with its own
+    # per-source limit, and /health/ isn't an API view, so neither counts.
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
     "DEFAULT_THROTTLE_RATES": {
+        "anon": env("API_RATE_ANON", default="120/min"),
+        "user": env("API_RATE_USER", default="1200/min"),
+        # Brute-force protection on login: 5 attempts per minute per IP.
         "login": "5/min",
+        # Account recovery and invitations, per IP: slow enough to stop
+        # guessing and mail-bombing, plenty for a person.
+        "password_reset": "5/hour",
+        "invitation": "30/hour",
+        "client_errors": "60/min",
     },
 }
+
+# ---- Accounts -----------------------------------------------------------
+# Where the web app is, for the links in invitation and password-reset
+# emails, e.g. https://dennis027.github.io/sentinel-asm (no trailing slash).
+FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:4200").rstrip("/")
+INVITATION_TTL_DAYS = env.int("INVITATION_TTL_DAYS", default=7)
+# Password-reset links: one hour, and they stop working once used (the
+# token covers the password hash and last login).
+PASSWORD_RESET_TIMEOUT = env.int("PASSWORD_RESET_TIMEOUT", default=60 * 60)
+# Sign in with a username or an email address (when exactly one account has it).
+AUTHENTICATION_BACKENDS = ["apps.api.backends.EmailOrUsernameBackend"]
+# A slow mail server must not hang the request that sends a link.
+EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=10)
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Densight API",

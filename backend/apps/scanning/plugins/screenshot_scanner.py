@@ -97,6 +97,11 @@ class ScreenshotScanner(BaseScanner):
     owned_finding_types = [Finding.FindingType.SCREENSHOT]
 
     TIMEOUT_MS = 15_000
+
+    def missing_tools(self) -> list[str]:
+        import importlib.util
+
+        return [] if importlib.util.find_spec("playwright") else ["playwright"]
     VIEWPORT = {"width": 1280, "height": 800}
 
     def run(self, target) -> list[RawFinding]:

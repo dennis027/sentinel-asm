@@ -34,6 +34,7 @@ class NmapScanner(BaseScanner):
     )
     applies_to = "asset"
     owned_finding_types = [Finding.FindingType.OPEN_PORT]
+    requires_tools = ["nmap"]
 
     TIMEOUT_SECONDS = 120
 

@@ -69,6 +69,14 @@ class Command(BaseCommand):
             f"Set up periodic task '{log_check.name}' -> runs every {self.REAP_EVERY_MINUTES} minutes."
         ))
 
+        worker_status = PeriodicTask.objects.update_or_create(
+            name="report-worker-status",
+            defaults=dict(interval=interval, crontab=None, task="apps.scanning.tasks.report_worker_status", enabled=True),
+        )[0]
+        self.stdout.write(self.style.SUCCESS(
+            f"Set up periodic task '{worker_status.name}' -> runs every {self.REAP_EVERY_MINUTES} minutes."
+        ))
+
         snapshots, _ = CrontabSchedule.objects.get_or_create(
             minute="30", hour="23", day_of_week="*", day_of_month="*", month_of_year="*",
         )
@@ -80,6 +88,7 @@ class Command(BaseCommand):
             ("send-weekly-reports", "apps.notifications.tasks.send_weekly_reports", weekly, "Mondays at 07:00 UTC"),
             ("expire-risk-acceptances", "apps.findings.tasks.expire_risk_acceptances", snapshots, "daily at 23:30 UTC"),
             ("purge-old-log-events", "apps.logs.tasks.purge_old_log_events", snapshots, "daily at 23:30 UTC"),
+            ("purge-old-scan-jobs", "apps.scanning.tasks.purge_old_scan_jobs", snapshots, "daily at 23:30 UTC"),
             ("sync-known-exploited", "apps.findings.tasks.sync_known_exploited", schedule, f"daily at {hour:02d}:00 UTC"),
         ]:
             task, created = PeriodicTask.objects.update_or_create(

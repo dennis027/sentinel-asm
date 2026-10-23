@@ -429,6 +429,11 @@ def guidance_for(finding) -> dict[str, str]:
             "Read the finding's description and references, apply the vendor's patch or configuration "
             "change, then run the scan again to confirm the finding is gone.",
         )
+    elif kind == Finding.FindingType.POLICY_VIOLATION:
+        impact, fix = (
+            f"Your team set a rule for the attack surface: {raw.get('rule', 'see the policy')}. This host breaks it.",
+            raw.get("guidance") or "Bring the host in line with the policy, or change the policy if the rule no longer applies.",
+        )
     elif raw.get("check") in CHECK_GUIDANCE:
         impact, fix = CHECK_GUIDANCE[raw["check"]]
     else:
