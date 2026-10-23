@@ -16,13 +16,7 @@
   <meta property="og:description" content="See your attack surface the way attackers do.">
   <meta property="og:image" content="brand/og-image.png">
   <meta name="color-scheme" content="light dark">
-  <script>
-    // Apply a saved light/dark choice before first paint (see ThemeService).
-    try {
-      var theme = localStorage.getItem('sentinel_theme');
-      if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
-    } catch (e) {}
-  </script>
+  <script src="theme-init.js"></script>
 </head>
 <body>
   <app-root></app-root>

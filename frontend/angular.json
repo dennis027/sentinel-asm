@@ -60,7 +60,19 @@
                   "replace": "src/environments/environment.ts",
                   "with": "src/environments/environment.prod.ts"
                 }
-              ]
+              ],
+              "index": {
+                "input": "src/index.prod.html",
+                "output": "index.html"
+              },
+              "optimization": {
+                "scripts": true,
+                "styles": {
+                  "minify": true,
+                  "inlineCritical": false
+                },
+                "fonts": true
+              }
             },
             "development": {
               "optimization": false,
@@ -87,7 +99,19 @@
                   "with": "src/environments/environment.ghpages.ts"
                 }
               ],
-              "baseHref": "/sentinel-asm/"
+              "baseHref": "/sentinel-asm/",
+              "index": {
+                "input": "src/index.prod.html",
+                "output": "index.html"
+              },
+              "optimization": {
+                "scripts": true,
+                "styles": {
+                  "minify": true,
+                  "inlineCritical": false
+                },
+                "fonts": true
+              }
             }
           },
           "defaultConfiguration": "production"

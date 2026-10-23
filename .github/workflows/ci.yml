@@ -70,3 +70,28 @@ jobs:
         run: npm test -- --watch=false --browsers=ChromeHeadless
       - name: Production build
         run: npm run build
+
+  # Known vulnerabilities in what we ship. Anything that runs in production
+  # (Python packages, the Angular app's runtime packages) fails the build;
+  # the full npm report (build and test tools too) is printed for reference.
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python packages (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt --progress-spinner off
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Angular app runtime packages (npm audit)
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=moderate
+      - name: Everything, including build tools (report only)
+        working-directory: frontend
+        run: npm audit || true
+
