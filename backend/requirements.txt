@@ -17,4 +17,4 @@ reportlab==4.4.10
 # Screenshots in S3-compatible object storage (Cloudflare R2, S3) when configured.
 django-storages[s3]==1.14.6
 # Serves the admin's and API docs' static files from the API itself (no nginx on Render).
-whitenoise==6.9.0
+whitenoise==6.12.0
