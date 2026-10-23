@@ -1,0 +1,124 @@
+:host {
+  position: relative;
+  display: inline-block;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  &.on { border-color: var(--color-accent); }
+}
+
+.count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 18px;
+}
+
+.menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 300px;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+ul {
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+li {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  &:hover { background: var(--color-row-hover); }
+}
+
+.view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 10px;
+  border: 0;
+  background: none;
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+  &.active .name { color: var(--color-accent); }
+}
+
+.name { font-size: 13.5px; font-weight: 600; }
+.meta { font-size: 12px; color: var(--color-text-secondary); }
+
+.delete {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-right: 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  &:hover { background: var(--color-danger-bg); color: var(--color-danger); }
+}
+
+.empty {
+  margin: 4px 6px var(--space-2);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+
+.save {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  background: none;
+  color: var(--color-accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  &:disabled { color: var(--color-text-muted); cursor: not-allowed; }
+}
+
+.save-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) 4px 2px;
+  border-top: 1px solid var(--color-border);
+  input:not([type='checkbox']) { width: 100%; margin: 0; }
+}
+
+.share {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.actions { display: flex; gap: var(--space-2); }

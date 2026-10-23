@@ -1,0 +1,72 @@
+<button
+  type="button"
+  class="btn secondary trigger"
+  [class.on]="open()"
+  aria-haspopup="menu"
+  [attr.aria-expanded]="open()"
+  (click)="open.set(!open())"
+>
+  <app-icon name="layers" [size]="14" /> Views
+  @if (views().length) {
+    <span class="count">{{ views().length }}</span>
+  }
+  <app-icon name="chevron" [size]="12" />
+</button>
+
+@if (open()) {
+  <div class="menu" role="menu">
+    @if (views().length) {
+      <ul>
+        @for (view of views(); track view.id) {
+          <li>
+            <button type="button" role="menuitem" class="view" [class.active]="active() === view.id" (click)="choose(view)">
+              <span class="name">{{ view.name }}</span>
+              <span class="meta">
+                @if (view.shared && !view.is_mine) {
+                  Shared by {{ view.owner_name }}
+                } @else if (view.shared) {
+                  Shared with the team
+                } @else {
+                  Only you
+                }
+              </span>
+            </button>
+            @if (view.is_mine) {
+              <button type="button" class="delete" [attr.aria-label]="'Delete ' + view.name" title="Delete" (click)="remove(view, $event)">
+                <app-icon name="x" [size]="12" />
+              </button>
+            }
+          </li>
+        }
+      </ul>
+    } @else {
+      <p class="empty">No saved views yet. Set some filters, then save them here to come back in one click.</p>
+    }
+
+    @if (naming()) {
+      <form class="save-form" (ngSubmit)="save()">
+        <input
+          name="view-name"
+          placeholder="Name, e.g. Crown jewels with criticals"
+          aria-label="View name"
+          maxlength="80"
+          [ngModel]="name()"
+          (ngModelChange)="name.set($event)"
+        />
+        <label class="share">
+          <input type="checkbox" name="shared" [ngModel]="shared()" (ngModelChange)="shared.set($event)" />
+          Share with the team
+        </label>
+        <div class="actions">
+          <button class="btn small" type="submit" [disabled]="saving() || !name().trim()">{{ saving() ? 'Saving…' : 'Save view' }}</button>
+          <button class="btn secondary small" type="button" (click)="naming.set(false)">Cancel</button>
+        </div>
+      </form>
+    } @else {
+      <button type="button" class="save" [disabled]="!hasFilters()" (click)="startSaving()"
+        [title]="hasFilters() ? 'Save the current filters' : 'Set a filter or search first'">
+        <app-icon name="plus" [size]="13" /> Save current filters
+      </button>
+    }
+  </div>
+}

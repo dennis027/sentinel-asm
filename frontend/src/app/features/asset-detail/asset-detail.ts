@@ -4,11 +4,12 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { forkJoin, map } from 'rxjs';
-import { CRITICALITIES, apiErrorMessage, criticalityLabel, findingTypeLabel } from '../../core/labels';
-import { Asset, Criticality, Finding, ScanJob, Severity } from '../../core/models/models';
+import { CRITICALITIES, apiErrorMessage, criticalityLabel, findingTypeLabel, webStatus } from '../../core/labels';
+import { Asset, Criticality, Finding, Member, ScanJob, Severity } from '../../core/models/models';
 import { AssetService } from '../../core/services/asset-service';
 import { FindingService } from '../../core/services/finding-service';
 import { OrganizationContextService } from '../../core/services/organization-context-service';
+import { OrganizationService } from '../../core/services/organization-service';
 import { ScanJobService } from '../../core/services/scan-job.service';
 import { ScannerService } from '../../core/services/scanner-service';
 import { ToastService } from '../../core/services/toast.service';
@@ -35,6 +36,7 @@ export class AssetDetail implements OnDestroy {
   private readonly scanJobService = inject(ScanJobService);
   private readonly scannerService = inject(ScannerService);
   private readonly toasts = inject(ToastService);
+  private readonly orgService = inject(OrganizationService);
   protected readonly orgContext = inject(OrganizationContextService);
   private readonly assetId = toSignal(inject(ActivatedRoute).paramMap.pipe(map((p) => p.get('id'))));
 
@@ -52,6 +54,9 @@ export class AssetDetail implements OnDestroy {
 
   readonly editCriticality = signal<Criticality>('normal');
   readonly editTags = signal('');
+  readonly editOwner = signal<number | ''>('');
+  readonly members = signal<Member[]>([]);
+  protected readonly webStatus = webStatus;
   readonly isSaving = signal(false);
   readonly isRescanning = signal(false);
   // scanner name -> what people call it
@@ -109,7 +114,8 @@ export class AssetDetail implements OnDestroy {
       .map((t) => t.trim())
       .filter(Boolean);
     this.isSaving.set(true);
-    this.assetService.update(asset.id, { criticality: this.editCriticality(), tags }).subscribe({
+    const owner = this.editOwner() === '' ? null : Number(this.editOwner());
+    this.assetService.update(asset.id, { criticality: this.editCriticality(), tags, owner }).subscribe({
       next: (updated) => {
         this.isSaving.set(false);
         this.setAsset(updated);
@@ -210,5 +216,9 @@ export class AssetDetail implements OnDestroy {
     this.asset.set(asset);
     this.editCriticality.set(asset.criticality);
     this.editTags.set(asset.tags.join(', '));
+    this.editOwner.set(asset.owner ?? '');
+    if (!this.members().length && this.orgContext.canTriageFindings()) {
+      this.orgService.members(asset.organization).subscribe({ next: (m) => this.members.set(m), error: () => undefined });
+    }
   }
 }

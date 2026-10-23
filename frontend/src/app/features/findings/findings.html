@@ -61,6 +61,7 @@
         title="No longer detected"
       >Resolved</button>
     </div>
+    <app-saved-views page="findings" [filters]="currentFilters()" (apply)="applyView($event)" />
   </div>
 
   @if (typeFilter(); as type) {

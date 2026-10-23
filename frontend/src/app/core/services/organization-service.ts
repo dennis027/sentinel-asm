@@ -7,8 +7,15 @@ import {
   CertificateRow,
   Changes,
   ComplianceFramework,
+  EmergingThreats,
+  GettingStarted,
+  Hosting,
+  Preflight,
+  SurfaceChangeKind,
+  SurfaceChanges,
   FixPlan,
   Heatmap,
+  Invitation,
   Member,
   OrgRole,
   Organization,
@@ -91,6 +98,22 @@ export class OrganizationService {
     return this.http.post<Member>(`${this.base}/${id}/members/`, { identifier, role });
   }
 
+  invitations(id: string): Observable<Invitation[]> {
+    return this.http.get<Invitation[]>(`${this.base}/${id}/invitations/`);
+  }
+
+  invite(id: string, email: string, role: OrgRole): Observable<Invitation> {
+    return this.http.post<Invitation>(`${this.base}/${id}/invitations/`, { email, role });
+  }
+
+  resendInvitation(id: string, invitationId: string): Observable<Invitation> {
+    return this.http.post<Invitation>(`${this.base}/${id}/invitations/${invitationId}/resend/`, {});
+  }
+
+  cancelInvitation(id: string, invitationId: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/${id}/invitations/${invitationId}/`);
+  }
+
   updateMemberRole(id: string, membershipId: string, role: OrgRole): Observable<Member> {
     return this.http.patch<Member>(`${this.base}/${id}/members/${membershipId}/`, { role });
   }
@@ -147,5 +170,33 @@ export class OrganizationService {
       params: { export_format: format },
       responseType: 'blob',
     });
+  }
+
+  /** The check before a scan; all scanners when none are named. */
+  preflight(id: string, scanners: string[] = []): Observable<Preflight> {
+    const params: Record<string, string> = scanners.length ? { scanners: scanners.join(',') } : {};
+    return this.http.get<Preflight>(`${this.base}/${id}/preflight/`, { params });
+  }
+
+  /** What appeared on and went from the attack surface, newest first. */
+  surfaceChanges(id: string, days = 30, kind: SurfaceChangeKind | '' = ''): Observable<SurfaceChanges> {
+    const params: Record<string, string | number> = { days };
+    if (kind) {
+      params['kind'] = kind;
+    }
+    return this.http.get<SurfaceChanges>(`${this.base}/${id}/surface-changes/`, { params });
+  }
+
+  /** Recently exploited vulnerabilities (CISA KEV) in software the organization runs. */
+  emergingThreats(id: string): Observable<EmergingThreats> {
+    return this.http.get<EmergingThreats>(`${this.base}/${id}/emerging-threats/`);
+  }
+
+  hosting(id: string): Observable<Hosting> {
+    return this.http.get<Hosting>(`${this.base}/${id}/hosting/`);
+  }
+
+  gettingStarted(id: string): Observable<GettingStarted> {
+    return this.http.get<GettingStarted>(`${this.base}/${id}/getting-started/`);
   }
 }

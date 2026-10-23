@@ -178,3 +178,10 @@ input {
 
 // The hero panel is dark in both themes.
 .hero .brand-accent { color: #a5b4fc; }
+
+.password-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  a { font-size: 12.5px; }
+}

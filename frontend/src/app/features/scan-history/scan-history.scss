@@ -66,8 +66,10 @@ td:last-child { text-align: right; }
 .bar .ok { background: var(--color-success); }
 .bar .bad { background: var(--color-danger); }
 .bar .wait { background: var(--color-accent); opacity: 0.45; }
+.bar .skip { background: var(--color-border-strong); }
 .counts { font-size: 12.5px; color: var(--color-text-secondary); }
 .counts .failed { color: var(--color-danger); font-weight: 600; }
+.counts .skipped { color: var(--color-text-muted); }
 .counts .found { color: var(--color-serious); font-weight: 600; }
 .counts .running { color: var(--color-accent); }
 
@@ -82,4 +84,32 @@ td:last-child { text-align: right; }
   .run-head { grid-template-columns: auto minmax(0, 1fr) auto; }
   .run-numbers { grid-column: 2 / 3; }
   .chev { grid-row: 1; grid-column: 3; }
+}
+
+.reasons {
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+
+  h3 { margin: 0 0 var(--space-2); font-size: 13px; font-weight: 650; }
+  ul { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+  li { display: flex; gap: var(--space-3); align-items: baseline; }
+}
+
+.reason-count {
+  flex: none;
+  min-width: 44px;
+  font-weight: 700;
+  color: var(--color-danger);
+  font-variant-numeric: tabular-nums;
+  &.skipped { color: var(--color-text-muted); }
+}
+
+.reason-text {
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-word;
+  small { display: block; color: var(--color-text-secondary); font-size: 12px; }
 }

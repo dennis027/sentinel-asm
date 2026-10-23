@@ -2,7 +2,7 @@ import { Component, effect, inject, signal, untracked } from '@angular/core';
 import { DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { ScanJob, ScanJobStatus, ScanRun, ScanTrigger } from '../../core/models/models';
+import { ScanJob, ScanJobStatus, ScanRun, ScanRunReason, ScanTrigger } from '../../core/models/models';
 import { ScanJobService } from '../../core/services/scan-job.service';
 import { ScannerService } from '../../core/services/scanner-service';
 import { ToastService } from '../../core/services/toast.service';
@@ -63,6 +63,8 @@ export class ScanHistory {
   readonly runs = signal<ScanRun[]>([]);
   readonly runCount = signal(0);
   readonly openRun = signal<string | null>(null);
+  // Why the open run's scans failed or were skipped, grouped by cause.
+  readonly runReasons = signal<ScanRunReason[]>([]);
   readonly runJobs = signal<ScanJob[]>([]);
   readonly runJobCount = signal(0);
   readonly runJobPage = signal(1);
@@ -100,7 +102,7 @@ export class ScanHistory {
       const busy =
         this.view() === 'runs'
           ? this.runs().some((r) => r.unfinished > 0)
-          : this.jobs().some((j) => j.status !== 'success' && j.status !== 'failed');
+          : this.jobs().some((j) => j.status !== 'success' && j.status !== 'failed' && j.status !== 'skipped');
       if (busy) this.load({ quiet: true });
     });
   }
@@ -192,7 +194,15 @@ export class ScanHistory {
     }
     this.openRun.set(run.run_id);
     this.runJobPage.set(1);
+    this.runReasons.set([]);
     this.loadRunJobs();
+    const org = this.orgContext.selectedOrganization();
+    if (org && (run.failed || run.skipped)) {
+      this.scanJobService.reasons(org.id, run.run_id).subscribe({
+        next: (reasons) => this.runReasons.set(reasons),
+        error: () => this.runReasons.set([]),
+      });
+    }
   }
 
   onRunJobPage(page: number): void {

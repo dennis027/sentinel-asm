@@ -75,6 +75,12 @@ describe('Login', () => {
     const last = http.expectOne(`${API}/auth/login/`);
     expect(last.request.body).toEqual({ username: 'dennis', password: 'secret', otp: '287082' });
     last.flush({ access: 'a', refresh: 'r' });
+    http.expectOne(`${API}/auth/me/`).flush({ username: 'dennis' });
     expect(navigate).toHaveBeenCalledWith('/dashboard');
+  });
+
+  it('links to the forgotten-password page and accepts an email address', () => {
+    expect(el.querySelector('label[for=username]')?.textContent).toContain('Username or email');
+    expect(el.querySelector('a[href="/forgot-password"]')).not.toBeNull();
   });
 });

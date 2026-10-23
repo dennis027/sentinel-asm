@@ -127,3 +127,29 @@ textarea {
   font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
   resize: vertical;
 }
+
+.sub { margin: var(--space-4) 0 var(--space-2); font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-muted); }
+.invites {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; flex-wrap: wrap; }
+  li + li { border-top: 1px solid var(--color-border); }
+}
+.inv-who { display: flex; flex-direction: column; min-width: 0; .muted { font-size: 12.5px; } }
+.inv-actions { display: flex; gap: var(--space-2); }
+.invite-link {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-bg);
+  p { margin: 0 0 var(--space-2); font-size: 13.5px; }
+}
+.link-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  code { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
+  .btn { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+}

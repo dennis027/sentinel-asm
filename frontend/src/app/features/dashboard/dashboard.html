@@ -21,23 +21,40 @@
           {{ isBuildingReport() ? 'Building…' : 'Download report' }}
         </button>
         @if (orgContext.canTriggerScans()) {
-          <a class="btn" routerLink="/scanners"><app-icon name="play" [size]="14" /> Run a scan</a>
+          <a class="btn" routerLink="/scanners" [queryParams]="{ run: 'all' }"><app-icon name="play" [size]="14" /> Run a scan</a>
         }
       </div>
     </div>
 
-    @if (nextSteps().length > 0) {
-      <div class="panel next-steps">
-        <p class="panel-title">Getting started</p>
-        <ol>
-          @for (step of nextSteps(); track step.link) {
-            <li>
-              <span>{{ step.text }}</span>
-              <a class="btn secondary small" [routerLink]="step.link">{{ step.action }}</a>
-            </li>
-          }
-        </ol>
-      </div>
+    @if (setup(); as s) {
+      @if (!s.complete && !setupHidden()) {
+        <div class="panel setup">
+          <div class="setup-head">
+            <div>
+              <p class="panel-title">Get the most out of Densight</p>
+              <p class="muted">{{ s.done }} of {{ s.total }} done</p>
+            </div>
+            <div class="setup-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0"
+              [attr.aria-valuemax]="s.total" [attr.aria-valuenow]="s.done">
+              <span [style.width.%]="(s.done / s.total) * 100"></span>
+            </div>
+            <button class="btn secondary small" type="button" (click)="hideSetup()">Hide</button>
+          </div>
+          <ol class="setup-steps">
+            @for (step of s.steps; track step.key) {
+              <li [class.done]="step.done">
+                <span class="tick" aria-hidden="true">@if (step.done) { <app-icon name="check" [size]="12" /> }</span>
+                @if (step.done) {
+                  <span class="step-title">{{ step.title }}</span>
+                } @else {
+                  <a class="step-title" [routerLink]="step.link">{{ step.title }}</a>
+                  <span class="step-detail">{{ step.detail }}</span>
+                }
+              </li>
+            }
+          </ol>
+        </div>
+      }
     }
 
     @if (riskSummary()?.narrative?.length) {
@@ -167,7 +184,10 @@
 
     @if (changes(); as changed) {
       <div class="panel changes">
-        <p class="panel-title">What changed in the last {{ changed.days }} days</p>
+        <div class="panel-heading">
+          <p class="panel-title">What changed in the last {{ changed.days }} days</p>
+          <a routerLink="/changes" class="panel-link">Every change <app-icon name="chevron-right" [size]="13" /></a>
+        </div>
         <div class="change-grid">
           <div class="change">
             <p class="change-count">{{ changed.new_assets.count | number }}</p>
@@ -205,6 +225,46 @@
             </ul>
           </div>
         </div>
+      </div>
+    }
+
+    @if (threats(); as t) {
+      <div class="panel threats" [class.calm]="!t.items.length">
+        <div class="panel-heading">
+          <p class="panel-title"><app-icon name="bug" [size]="15" /> Exploited in the wild, in software you run</p>
+          <a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog" target="_blank" rel="noopener noreferrer" class="panel-link">CISA KEV</a>
+        </div>
+        @if (t.items.length) {
+          <ul class="threat-list">
+            @for (item of t.items.slice(0, 4); track item.cve + item.software) {
+              <li>
+                <div class="threat-main">
+                  <p class="threat-name">
+                    <strong>{{ item.cve }}</strong> {{ item.name }}
+                    @if (item.confirmed) { <span class="badge tone-danger">Found by a scan</span> }
+                    @if (item.ransomware) { <span class="badge tone-serious">Used by ransomware</span> }
+                  </p>
+                  <p class="threat-meta">
+                    You run {{ item.software }} on
+                    @for (host of item.hosts.slice(0, 3); track host.id; let last = $last) {
+                      <a [routerLink]="['/assets', host.id]">{{ host.value }}</a>@if (host.version) { ({{ host.version }}) }@if (!last) {, }
+                    }
+                    @if (item.hosts.length > 3) { and {{ item.hosts.length - 3 }} more }
+                    · added {{ item.date_added | date: 'MMM d' }}
+                  </p>
+                </div>
+                <p class="threat-action">{{ item.confirmed ? 'Patch now' : 'Check your version' }}</p>
+              </li>
+            }
+          </ul>
+          @if (t.items.length > 4) {
+            <p class="muted more">{{ t.items.length - 4 }} more in the last {{ t.days }} days.</p>
+          }
+        } @else {
+          <p class="calm-text"><app-icon name="check" [size]="14" />
+            None of the {{ t.software_checked | number }} products found on your hosts appear among the
+            {{ t.catalogue_recent | number }} vulnerabilities CISA confirmed as exploited in the last {{ t.days }} days.</p>
+        }
       </div>
     }
 

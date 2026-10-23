@@ -14,6 +14,7 @@ import { ticketText } from '../../core/ticket';
 import { Pager } from '../../shared/components/pager/pager';
 import { Icon } from '../../shared/components/icon/icon';
 import { EmptyArt, EmptyState } from '../../shared/components/empty-state/empty-state';
+import { SavedViews } from '../../shared/components/saved-views/saved-views';
 
 // open: still detected, nobody has ruled on it
 // triaged: still detected, but accepted or marked a false positive
@@ -48,7 +49,7 @@ const EMPTY_STATES: Record<FindingView, { art: EmptyArt; title: string; message:
 
 @Component({
   selector: 'app-findings',
-  imports: [PluralPipe, FormsModule, Pager, DatePipe, Icon, EmptyState, RouterLink],
+  imports: [PluralPipe, FormsModule, Pager, DatePipe, Icon, EmptyState, RouterLink, SavedViews],
   templateUrl: './findings.html',
   styleUrl: './findings.scss',
 })
@@ -104,6 +105,17 @@ export class Findings implements OnDestroy {
       !!this.typeFilter() ||
       !!this.workflow(),
   );
+  // What a saved view stores for this page.
+  readonly currentFilters = computed(() => {
+    const filters: Record<string, string> = {};
+    if (this.searchTerm().trim()) filters['q'] = this.searchTerm().trim();
+    if (this.severityFilter()) filters['severity'] = this.severityFilter();
+    if (this.kind() !== 'issue') filters['kind'] = this.kind() || 'all';
+    if (this.workflow()) filters['workflow'] = this.workflow();
+    if (this.view() !== 'open') filters['view'] = this.view();
+    if (this.typeFilter()) filters['type'] = this.typeFilter()!;
+    return filters;
+  });
   readonly emptyState = computed(() =>
     this.isFiltered()
       ? {
@@ -148,6 +160,8 @@ export class Findings implements OnDestroy {
       untracked(() => {
         const severity = params?.get('severity');
         if (severity) this.severityFilter.set(severity as Severity);
+        const search = params?.get('q');
+        if (search) this.searchTerm.set(search);
         // Links from the dashboard open a remediation view directly.
         if (params?.get('overdue')) this.workflow.set('overdue');
         else if (params?.get('regressed')) this.workflow.set('regressed');
@@ -165,6 +179,21 @@ export class Findings implements OnDestroy {
         }
       });
     });
+  }
+
+  applyView(filters: Record<string, string>): void {
+    this.searchTerm.set(filters['q'] ?? '');
+    this.severityFilter.set((filters['severity'] as Severity) ?? '');
+    this.kind.set(filters['kind'] === 'all' ? '' : ((filters['kind'] as FindingKind) ?? 'issue'));
+    this.workflow.set((filters['workflow'] as Workflow) ?? '');
+    this.view.set((filters['view'] as FindingView) ?? 'open');
+    this.page.set(1);
+    if ((filters['type'] ?? null) !== this.typeFilter()) {
+      // The effect watching ?type= refetches.
+      this.router.navigate([], { queryParams: { type: filters['type'] || null }, queryParamsHandling: 'merge' });
+    } else {
+      this.fetchFindings();
+    }
   }
 
   onWorkflowChange(value: string): void {

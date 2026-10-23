@@ -31,6 +31,8 @@ const PAGES: { label: string; path: string; icon: IconName; words: string }[] = 
   { label: 'Board view', path: '/board', icon: 'monitor', words: 'presentation tv wall screen full screen meeting' },
   { label: 'Fix plan', path: '/fix-plan', icon: 'wrench', words: 'priorities what to fix first todo plan grade' },
   { label: 'My work', path: '/my-work', icon: 'inbox', words: 'assigned to me tasks deadline' },
+  { label: 'Changes', path: '/changes', icon: 'repeat', words: 'what changed new hosts ports software diff since last week' },
+  { label: 'Policies', path: '/policies', icon: 'shield', words: 'rules forbidden ports software hosting guardrails' },
   { label: 'Findings', path: '/findings', icon: 'findings', words: 'issues vulnerabilities problems' },
   { label: 'Attack surface map', path: '/surface-map', icon: 'map', words: 'graph visual overview' },
   { label: 'Assets', path: '/assets', icon: 'assets', words: 'hosts subdomains crown jewel tags import' },

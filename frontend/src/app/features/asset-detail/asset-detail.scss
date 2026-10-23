@@ -102,3 +102,18 @@ td:first-child { padding-left: 0; }
   .grid { grid-template-columns: 1fr; }
   .counts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+.web-facts {
+  dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 8px var(--space-3);
+    margin: 0;
+    font-size: 13.5px;
+  }
+  dt { color: var(--color-text-secondary); }
+  dd { margin: 0; display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .wrap { display: block; word-break: break-all; }
+  .mono { font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+}
+

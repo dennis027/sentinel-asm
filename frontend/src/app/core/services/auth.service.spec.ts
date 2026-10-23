@@ -18,12 +18,26 @@ describe('AuthService', () => {
 
   afterEach(() => http.verify());
 
-  function logIn(): void {
-    service.login('erin', 'pw').subscribe();
+  function logIn(asTyped = 'erin'): void {
+    service.login(asTyped, 'pw').subscribe();
     http
       .expectOne(`${environment.apiBaseUrl}/auth/login/`)
       .flush({ access: 'access-1', refresh: 'refresh-1' });
+    // Then: who is this account, really (signing in with an email gives the email).
+    http.expectOne(`${environment.apiBaseUrl}/auth/me/`).flush({ username: 'erin' });
   }
+
+  it('remembers the real username after signing in with an email address', () => {
+    logIn('erin@acme.com');
+    expect(service.currentUsername()).toBe('erin');
+    expect(localStorage.getItem('sentinel_username')).toBe('erin');
+  });
+
+  it('starts a session from an invitation that created the account', () => {
+    service.startSession('a', 'r', 'new@acme.com');
+    expect(service.isAuthenticated()).toBeTrue();
+    expect(service.currentUsername()).toBe('new@acme.com');
+  });
 
   it('stores the session on login', () => {
     expect(service.isAuthenticated()).toBeFalse();

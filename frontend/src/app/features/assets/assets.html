@@ -81,13 +81,20 @@
     </p>
   }
   <div class="controls">
-      <input
-        type="text"
-        placeholder="Search assets"
-        aria-label="Search assets"
-        [ngModel]="searchTerm()"
-        (ngModelChange)="onSearchChange($event)"
-      />
+      <div class="search">
+        <app-icon name="search" [size]="14" />
+        <input
+          type="text"
+          placeholder="Search, or try tech:nginx provider:aws owner:me"
+          aria-label="Search assets"
+          spellcheck="false"
+          autocapitalize="off"
+          [ngModel]="searchTerm()"
+          (ngModelChange)="onSearchChange($event)"
+        />
+        <button type="button" class="help-toggle" [class.on]="showHelp()" (click)="showHelp.set(!showHelp())"
+          [attr.aria-expanded]="showHelp()" title="What the search understands">?</button>
+      </div>
       <select
         aria-label="Filter by type"
         [ngModel]="assetTypeFilter()"
@@ -109,7 +116,18 @@
           <option [value]="c.value">{{ c.label }}</option>
         }
       </select>
+      <app-saved-views page="assets" [filters]="currentFilters()" (apply)="applyView($event)" />
   </div>
+  @if (showHelp()) {
+    <div class="query-help panel">
+      <p>Combine terms to narrow the list; a word on its own matches the host name. Click one to add it.</p>
+      <ul>
+        @for (h of queryHelp; track h.term) {
+          <li><button type="button" (click)="addTerm(h.term)"><code>{{ h.term }}</code></button> {{ h.meaning }}</li>
+        }
+      </ul>
+    </div>
+  }
 
   @if (isLoading()) {
     <p class="loading">Loading…</p>
@@ -126,31 +144,46 @@
       </app-empty-state>
     }
   } @else {
-    <table>
+    <table class="asset-table">
       <thead>
         <tr>
           <th>Asset</th>
+          <th>Web</th>
+          <th>Hosted on</th>
+          <th>Owner</th>
           <th>Importance</th>
-          <th>Technologies</th>
           <th title="A+ is best, F is worst. Based on open findings.">Risk</th>
-          <th>Last seen</th>
         </tr>
       </thead>
       <tbody>
         @for (asset of assets(); track asset.id) {
-          <tr>
+          @let status = webStatus(asset.web);
+          <tr class="clickable" [class.selected]="peeking()?.id === asset.id" (click)="peek(asset, $event)">
             <td>
-              <a [routerLink]="['/assets', asset.id]" title="Everything about {{ asset.value }}">{{ asset.value }}</a>
-              @if (asset.source === 'manual') {
-                <span class="badge manual" title="Added by hand rather than discovered">Added manually</span>
-              }
-              @if (asset.out_of_scope) {
-                <span class="badge tone-serious manual" title="On the never-scan list">Out of scope</span>
-              }
-              @for (tag of asset.tags; track tag) {
-                <a class="badge tag" [routerLink]="[]" [queryParams]="{ tag: tag }">{{ tag }}</a>
-              }
+              <div class="asset-cell">
+                <span class="monogram" aria-hidden="true">{{ asset.value.charAt(0).toUpperCase() }}</span>
+                <div>
+                  <a [routerLink]="['/assets', asset.id]" title="Everything about {{ asset.value }}">{{ asset.value }}</a>
+                  @if (asset.source === 'manual') {
+                    <span class="badge manual" title="Added by hand rather than discovered">Added manually</span>
+                  }
+                  @if (asset.out_of_scope) {
+                    <span class="badge tone-serious manual" title="On the never-scan list">Out of scope</span>
+                  }
+                  @for (tag of asset.tags; track tag) {
+                    <a class="badge tag" [routerLink]="[]" [queryParams]="{ tag: tag }">{{ tag }}</a>
+                  }
+                  <p class="sub">
+                    {{ asset.web.title || (asset.technologies.length ? techNames(asset) : 'Not scanned on the web yet') }}
+                  </p>
+                </div>
+              </div>
             </td>
+            <td>
+              <span class="web-status tone-{{ status.tone }}" [title]="status.hint">{{ status.text }}</span>
+            </td>
+            <td class="muted">{{ asset.hosting.provider || '—' }}</td>
+            <td class="muted">{{ asset.owner_name || '—' }}</td>
             <td>
               <span class="importance importance-{{ asset.criticality }}">
                 @if (asset.criticality === 'crown_jewel') {
@@ -159,18 +192,24 @@
                 {{ criticalityLabel(asset.criticality) }}
               </span>
             </td>
-            <td class="muted">
-              {{ asset.technologies.length ? techNames(asset) : '—' }}
-            </td>
             <td>
               <span class="badge grade-{{ asset.risk_grade }}">{{ asset.risk_grade }}</span>
             </td>
-            <td class="muted">{{ asset.last_seen | date: 'MMM d, h:mm a' }}</td>
           </tr>
         }
       </tbody>
     </table>
     <p class="muted count">{{ totalCount() | plural: 'asset' }} in total</p>
     <app-pager [page]="page()" [count]="totalCount()" (pageChange)="onPageChange($event)" />
+  }
+
+  @if (peeking(); as asset) {
+    <app-asset-peek
+      [asset]="asset"
+      [members]="members()"
+      [canEdit]="orgContext.canTriggerScans()"
+      (closed)="peeking.set(null)"
+      (changed)="onPeekChanged($event)"
+    />
   }
 </div>

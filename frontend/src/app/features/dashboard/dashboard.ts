@@ -2,7 +2,7 @@ import { PluralPipe } from '../../shared/pipes/plural';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { Changes, Finding, Heatmap, RiskSummary, TrendPoint } from '../../core/models/models';
+import { Changes, EmergingThreats, Finding, GettingStarted, Heatmap, RiskSummary, TrendPoint } from '../../core/models/models';
 import { TrendChart } from '../../shared/components/trend-chart/trend-chart';
 import { GradeCalendar } from '../../shared/components/grade-calendar/grade-calendar';
 import { RiskHeatmap } from '../../shared/components/risk-heatmap/risk-heatmap';
@@ -12,6 +12,8 @@ import { FindingService } from '../../core/services/finding-service';
 import { OrganizationService } from '../../core/services/organization-service';
 import { OrganizationContextService } from '../../core/services/organization-context-service';
 import { Icon } from '../../shared/components/icon/icon';
+const SETUP_HIDDEN_KEY = 'densight_setup_hidden_';
+
 @Component({
   selector: 'app-dashboard',
   imports: [PluralPipe, DatePipe, DecimalPipe, RouterLink, Icon, TrendChart, GradeCalendar, RiskHeatmap],
@@ -46,6 +48,11 @@ export class Dashboard {
 
   // The setup steps a new organization still has ahead of it. Empty
   // once the domain is verified and discovery has found something.
+  // The setup checklist, and whether this person hid it for this organization.
+  readonly setup = signal<GettingStarted | null>(null);
+  readonly setupHidden = signal(false);
+  readonly threats = signal<EmergingThreats | null>(null);
+
   readonly nextSteps = computed(() => {
     const org = this.orgContext.selectedOrganization();
     if (!org) return [];
@@ -141,9 +148,28 @@ export class Dashboard {
     });
   }
 
+  hideSetup(): void {
+    this.setupHidden.set(true);
+    try {
+      localStorage.setItem(SETUP_HIDDEN_KEY + this.orgContext.selectedOrganization()?.id, '1');
+    } catch {
+      // Storage blocked: it comes back next visit.
+    }
+  }
+
   private loadOrgData(orgId: string): void {
     this.isLoading.set(true);
     this.errorMessage.set(null);
+
+    try {
+      this.setupHidden.set(localStorage.getItem(SETUP_HIDDEN_KEY + orgId) === '1');
+    } catch {
+      this.setupHidden.set(false);
+    }
+    this.setup.set(null);
+    this.orgService.gettingStarted(orgId).subscribe({ next: (s) => this.setup.set(s), error: () => undefined });
+    this.threats.set(null);
+    this.orgService.emergingThreats(orgId).subscribe({ next: (t) => this.threats.set(t), error: () => undefined });
 
     this.changes.set(null);
     this.trend.set([]);

@@ -43,7 +43,11 @@ describe('AssetDetail', () => {
     harness.detectChanges();
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    // The team, for the Owner picker.
+    http.match((r) => r.url.endsWith('/members/')).forEach((r) => r.flush([]));
+    http.verify();
+  });
 
   it('shows the host with its importance, issues, ports and certificate', () => {
     expect(el.querySelector('h1')?.textContent).toBe('pay.acme.com');
@@ -62,7 +66,7 @@ describe('AssetDetail', () => {
     (el.querySelector('.context button') as HTMLButtonElement).click();
     const request = http.expectOne(`${API}/assets/a1/`);
     expect(request.request.method).toBe('PATCH');
-    expect(request.request.body).toEqual({ criticality: 'crown_jewel', tags: ['payments', 'pci'] });
+    expect(request.request.body).toEqual({ criticality: 'crown_jewel', tags: ['payments', 'pci'], owner: null });
     request.flush(makeAsset({ id: 'a1', criticality: 'crown_jewel', tags: ['payments', 'pci'] }));
   });
 });

@@ -8,6 +8,7 @@ import {
   ScanJob,
   ScanProgress,
   ScanRun,
+  ScanRunReason,
   ScanTrigger,
   TriggerScanRequest,
 } from '../models/models';
@@ -65,6 +66,13 @@ export class ScanJobService {
     });
   }
 
+  /** Why a run's scans failed or were skipped, grouped by cause. */
+  reasons(organizationId: string, runId: string): Observable<ScanRunReason[]> {
+    return this.http.get<ScanRunReason[]>(`${this.base}/reasons/`, {
+      params: { organization: organizationId, run_id: runId },
+    });
+  }
+
   /** Each scanner's most recent domain-wide run for this organization. */
   progress(organizationId: string): Observable<ScanProgress[]> {
     return this.http.get<ScanProgress[]>(`${this.base}/progress/`, {
@@ -86,7 +94,7 @@ export class ScanJobService {
         this.get(id).subscribe({
           next: (job) => {
             subscriber.next(job);
-            if (job.status === 'success' || job.status === 'failed') {
+            if (job.status === 'success' || job.status === 'failed' || job.status === 'skipped') {
               subscriber.complete();
             } else {
               timeoutId = setTimeout(poll, intervalMs);

@@ -31,6 +31,46 @@ export interface Organization {
   log_retention_days: number;
 }
 
+/** The signed-in account. */
+export interface Profile {
+  id: number;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  date_joined: string;
+  last_login: string | null;
+  two_factor_enabled: boolean;
+}
+
+/** An invitation still waiting to be accepted, as admins see it. */
+export interface Invitation {
+  id: string;
+  email: string;
+  role: OrgRole;
+  role_label: string;
+  status: 'pending' | 'accepted' | 'revoked' | 'expired';
+  invited_by: string | null;
+  created_at: string;
+  expires_at: string;
+  // Only right after creating or resending: the link, shown once.
+  invite_link?: string;
+  email_sent?: boolean;
+}
+
+/** What an invitation link is for, as the invited person sees it. */
+export interface InvitationDetail {
+  organization: string;
+  email: string;
+  role: OrgRole;
+  role_label: string;
+  invited_by: string | null;
+  expires_at: string;
+  status: Invitation['status'];
+  detail: string;
+  account_exists: boolean;
+}
+
 export interface Member {
   // Membership id, not the user's id.
   id: string;
@@ -73,9 +113,32 @@ export interface Asset {
   tags: string[];
   // On the organization's never-scan list.
   out_of_scope: boolean;
+  // The member who answers for this host; new issues are assigned to them.
+  owner: number | null;
+  owner_name: string | null;
+  // What the last scans saw of the host itself (empty until scanned).
+  web: AssetWeb;
+  hosting: AssetHosting;
 }
 
-export type ScanJobStatus = 'pending' | 'running' | 'retrying' | 'success' | 'failed';
+export interface AssetWeb {
+  status?: number;
+  title?: string;
+  final_url?: string;
+  response_ms?: number;
+  server?: string;
+  checked_at?: string;
+}
+
+export interface AssetHosting {
+  ips?: string[];
+  cnames?: string[];
+  reverse_names?: string[];
+  provider?: string;
+  checked_at?: string;
+}
+
+export type ScanJobStatus = 'pending' | 'running' | 'retrying' | 'success' | 'failed' | 'skipped';
 
 export interface ScanJob {
   id: string;
@@ -116,6 +179,8 @@ export interface ScanRun {
   jobs: number;
   succeeded: number;
   failed: number;
+  // Not run because the host no longer exists in DNS; not a failure.
+  skipped: number;
   unfinished: number;
   new_findings: number;
   started: string;
@@ -150,6 +215,7 @@ export interface ScanProgress {
   running: number;
   success: number;
   failed: number;
+  skipped: number;
   finished: boolean;
 }
 
@@ -182,7 +248,8 @@ export type FindingType =
   | 'unusual_certificate'
   | 'exposed_secret'
   | 'public_bucket'
-  | 'domain_registration';
+  | 'domain_registration'
+  | 'policy_violation';
 
 export type FindingStatus = 'open' | 'accepted' | 'false_positive';
 
@@ -446,6 +513,8 @@ export interface SurfaceNode {
   open_findings: number;
   critical_high: number;
   clean: boolean;
+  // Hosting provider, "" when not identified.
+  provider: string;
 }
 
 export interface SurfaceMap {
@@ -654,3 +723,149 @@ export interface LogOverview {
   retention_days: number;
   rules: { rule: string; severity: Severity; title: string; description: string }[];
 }
+
+/** Why a run's scans failed or were skipped, grouped by cause. */
+export interface ScanRunReason {
+  status: 'failed' | 'skipped';
+  reason: string;
+  count: number;
+  scanners: string[];
+  hosts: string[];
+}
+
+/** The check before a scan (GET /organizations/{id}/preflight/). */
+export interface Preflight {
+  scans_allowed: boolean;
+  hosts: {
+    active: number;
+    in_scope: number;
+    excluded: number;
+    checked: number;
+    resolves: number;
+    missing: number;
+    private: number;
+    unknown: number;
+    missing_hosts: string[];
+    private_hosts: string[];
+    checked_at: string;
+  };
+  scanners: {
+    name: string;
+    label: string;
+    applies_to: 'asset' | 'organization';
+    targets: number;
+    likely_skipped: number;
+    missing_tools: string[];
+    running: boolean;
+    typical_seconds: number;
+  }[];
+  jobs: number;
+  estimated_seconds: number;
+  worker_seen_at: string | null;
+  warnings: string[];
+  ready: boolean;
+}
+
+export type SurfaceChangeKind =
+  | 'host_added'
+  | 'host_gone'
+  | 'port_opened'
+  | 'port_closed'
+  | 'software_seen'
+  | 'certificate'
+  | 'dns_changed';
+
+export interface SurfaceChangeEvent {
+  kind: SurfaceChangeKind;
+  label: string;
+  at: string;
+  asset: string;
+  asset_value: string;
+  detail: string;
+}
+
+export interface SurfaceChanges {
+  days: number;
+  since: string;
+  counts: Record<SurfaceChangeKind, number>;
+  kinds: Record<SurfaceChangeKind, string>;
+  total: number;
+  events: SurfaceChangeEvent[];
+}
+
+export interface EmergingThreat {
+  cve: string;
+  name: string;
+  vendor: string;
+  product: string;
+  description: string;
+  required_action: string;
+  date_added: string;
+  due_date: string | null;
+  ransomware: boolean;
+  software: string;
+  hosts: { id: string; value: string; version: string; confirmed: boolean }[];
+  // A scan already found this CVE on one of the hosts.
+  confirmed: boolean;
+}
+
+export interface EmergingThreats {
+  days: number;
+  catalogue_recent: number;
+  software_checked: number;
+  items: EmergingThreat[];
+}
+
+export interface Hosting {
+  providers: { provider: string; count: number; hosts: string[] }[];
+  unknown: { count: number; hosts: string[] };
+  unchecked: number;
+  addresses: number;
+  shared_addresses: { address: string; count: number; hosts: string[] }[];
+}
+
+export interface GettingStartedStep {
+  key: string;
+  title: string;
+  detail: string;
+  done: boolean;
+  link: string;
+}
+
+export interface GettingStarted {
+  steps: GettingStartedStep[];
+  done: number;
+  total: number;
+  complete: boolean;
+}
+
+export type PolicyKind = 'port' | 'technology' | 'hostname' | 'provider';
+
+export interface SurfacePolicy {
+  id: string;
+  organization: string;
+  name: string;
+  kind: PolicyKind;
+  kind_label: string;
+  value: string;
+  severity: Severity;
+  guidance: string;
+  enabled: boolean;
+  rule: string;
+  // Hosts breaking it right now.
+  breaking: number;
+  created_at: string;
+}
+
+export interface SavedView {
+  id: string;
+  organization: string;
+  page: 'findings' | 'assets';
+  name: string;
+  filters: Record<string, string>;
+  shared: boolean;
+  owner_name: string;
+  is_mine: boolean;
+  created_at: string;
+}
+

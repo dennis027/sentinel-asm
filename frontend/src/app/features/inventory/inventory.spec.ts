@@ -30,6 +30,11 @@ describe('Inventory', () => {
       { port: 3389, protocol: 'tcp', service: 'ms-wbt-server', severity: 'high', host_count: 1,
         hosts: [{ id: 'a1', value: 'staging.acme.com', product: '', finding: 'f1', status: 'open' }] },
     ]);
+    http.expectOne(`${API}/organizations/org-1/hosting/`).flush({
+      providers: [{ provider: 'AWS', count: 3, hosts: ['www.acme.com', 'api.acme.com', 'pay.acme.com'] }],
+      unknown: { count: 1, hosts: ['legacy.acme.com'] }, unchecked: 0, addresses: 4,
+      shared_addresses: [{ address: '203.0.113.20', count: 2, hosts: ['legacy.acme.com', 'shop.acme.com'] }],
+    });
     http.expectOne(`${API}/organizations/org-1/certificates/`).flush([
       { asset: 'a1', asset_value: 'legacy.acme.com', finding: 'f9', not_after: '2026-01-01T00:00:00Z',
         days_remaining: -12, severity: 'critical' },
@@ -59,5 +64,13 @@ describe('Inventory', () => {
     await TestBed.inject(Router).navigate([], { queryParams: { tab: 'certificates' } });
     fixture.detectChanges();
     expect(el.querySelector('tbody')?.textContent).toContain('expired 12 days ago');
+  });
+
+  it('groups hosts by who hosts them', () => {
+    const tab = Array.from(el.querySelectorAll('.tabs button')).find((b) => b.textContent?.includes('Hosting')) as HTMLButtonElement;
+    const router = TestBed.inject(Router);
+    spyOn(router, 'navigate').and.resolveTo(true);
+    tab.click();
+    expect(router.navigate).toHaveBeenCalledWith([], { queryParams: { tab: 'hosting' }, replaceUrl: true });
   });
 });

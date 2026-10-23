@@ -13,6 +13,11 @@ const MEMBERS = [
   { id: 'm2', user_id: 9, username: 'amina', email: '', role: 'admin', created_at: '' },
 ];
 
+const VIEWS = [{
+  id: 'v1', organization: 'org-1', page: 'findings', name: 'Criticals only', filters: { severity: 'critical', view: 'triaged' },
+  shared: true, owner_name: 'amina', is_mine: false, created_at: '',
+}];
+
 describe('Findings', () => {
   let fixture: ComponentFixture<Findings>;
   let http: HttpTestingController;
@@ -32,6 +37,7 @@ describe('Findings', () => {
 
     fixture = TestBed.createComponent(Findings);
     fixture.detectChanges();
+    http.expectOne((r) => r.url === `${API}/saved-views/`).flush(VIEWS);
     // Analysts and above load the team, for the Owner picker.
     if (role !== 'viewer') {
       http.expectOne(`${API}/organizations/org-1/members/`).flush(MEMBERS);
@@ -313,5 +319,36 @@ describe('Findings', () => {
     expectList().flush(page([makeFinding({ id: 'f1' })]));
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('input.pick')).toBeNull();
+  });
+
+  it('applies a saved view and saves the current filters as a new one', async () => {
+    await setUp('analyst');
+    expectList().flush(page([]));
+    const root: HTMLElement = fixture.nativeElement;
+    (root.querySelector('app-saved-views .trigger') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    (root.querySelector('app-saved-views .view') as HTMLButtonElement).click();
+    const list = expectList();
+    expect(list.request.params.get('severity')).toBe('critical');
+    expect(list.request.params.get('triaged')).toBe('true');
+    list.flush(page([]));
+    fixture.detectChanges();
+
+    (root.querySelector('app-saved-views .trigger') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    (root.querySelector('app-saved-views .save') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const name = root.querySelector('app-saved-views .save-form input') as HTMLInputElement;
+    name.value = 'Triaged criticals';
+    name.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (root.querySelector('app-saved-views .save-form button[type=submit]') as HTMLButtonElement).click();
+    const create = http.expectOne(`${API}/saved-views/`);
+    expect(create.request.body).toEqual({
+      organization: 'org-1', page: 'findings', name: 'Triaged criticals',
+      filters: { severity: 'critical', view: 'triaged' }, shared: false,
+    });
+    create.flush({ ...VIEWS[0], id: 'v2', name: 'Triaged criticals', is_mine: true });
   });
 });

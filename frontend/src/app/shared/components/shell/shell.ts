@@ -44,6 +44,8 @@ export class Shell implements OnInit {
 
   // Open issues assigned to the signed-in person in this organization.
   readonly myWorkCount = signal(0);
+  // Icons only, to give pages more room; remembered on this browser.
+  readonly collapsed = signal(readCollapsed());
 
   protected readonly themeOptions: { value: ThemePreference; label: string; icon: IconName }[] = [
     { value: 'light', label: 'Light theme', icon: 'sun' },
@@ -80,5 +82,24 @@ export class Shell implements OnInit {
 
   onOrgChange(orgId: string): void {
     this.orgContext.selectOrganization(orgId);
+  }
+
+  toggleCollapsed(): void {
+    this.collapsed.update((value) => !value);
+    try {
+      localStorage.setItem(COLLAPSED_KEY, this.collapsed() ? '1' : '0');
+    } catch {
+      // Storage blocked: it just won't be remembered.
+    }
+  }
+}
+
+const COLLAPSED_KEY = 'densight_sidebar_collapsed';
+
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
   }
 }

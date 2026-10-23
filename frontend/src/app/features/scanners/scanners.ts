@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ScanProgress, ScannerInfo } from '../../core/models/models';
 import { AssetService } from '../../core/services/asset-service';
 import { OrganizationContextService } from '../../core/services/organization-context-service';
@@ -9,8 +9,8 @@ import { OrganizationService } from '../../core/services/organization-service';
 import { ScanJobService } from '../../core/services/scan-job.service';
 import { ScannerService } from '../../core/services/scanner-service';
 import { ToastService } from '../../core/services/toast.service';
-import { ConfirmService } from '../../core/services/confirm.service';
 import { Icon, scannerIcon } from '../../shared/components/icon/icon';
+import { PreflightDialog } from '../../shared/components/preflight-dialog/preflight-dialog';
 import { SCANNER_CATEGORIES } from '../../core/labels';
 import { firstValueFrom } from 'rxjs';
 
@@ -24,7 +24,7 @@ const PROGRESS_REFRESH_MS = 4000;
  */
 @Component({
   selector: 'app-scanners',
-  imports: [RouterLink, Icon, DecimalPipe, DatePipe],
+  imports: [RouterLink, Icon, DecimalPipe, DatePipe, PreflightDialog],
   templateUrl: './scanners.html',
   styleUrl: './scanners.scss',
 })
@@ -34,7 +34,7 @@ export class Scanners implements OnDestroy {
   private readonly scanJobService = inject(ScanJobService);
   private readonly orgService = inject(OrganizationService);
   private readonly toasts = inject(ToastService);
-  private readonly confirm = inject(ConfirmService);
+  private readonly router = inject(Router);
   protected readonly orgContext = inject(OrganizationContextService);
   private refreshHandle: ReturnType<typeof setTimeout> | undefined;
 
@@ -68,6 +68,10 @@ export class Scanners implements OnDestroy {
       (this.orgContext.selectedOrganization()?.scans_allowed ?? false),
   );
 
+  // The check before a scan: which scanners it is for, and how to answer.
+  readonly preflightFor = signal<string[] | null>(null);
+  private answerPreflight: ((go: boolean) => void) | null = null;
+
   readonly isVerifying = signal(false);
   readonly verifyMessage = signal<string | null>(null);
 
@@ -87,6 +91,9 @@ export class Scanners implements OnDestroy {
       });
     });
 
+    // The dashboard's "Run a scan" lands here with ?run=all.
+    const runAllOnLoad = inject(ActivatedRoute).snapshot.queryParamMap.get('run') === 'all';
+
     this.scannerService.list().subscribe({
       next: (scanners) => {
         // Discovery first: it is what produces the assets the others run on.
@@ -98,6 +105,10 @@ export class Scanners implements OnDestroy {
           ),
         );
         this.isLoading.set(false);
+        if (runAllOnLoad) {
+          this.router.navigate([], { queryParams: { run: null }, replaceUrl: true });
+          this.runAll();
+        }
       },
       error: () => {
         this.errorMessage.set('Could not load scanners.');
@@ -147,19 +158,7 @@ export class Scanners implements OnDestroy {
 
     const toStart = this.scanners().filter((scanner) => !this.isRunning(scanner));
     if (!toStart.length) return;
-    const count = this.assetCount() ?? 0;
-    const perAsset = toStart.filter((s) => s.applies_to === 'asset').length;
-    const total = perAsset * count + (toStart.length - perAsset);
-    const confirmed = await this.confirm.ask({
-      title: `Run all ${toStart.length} scanners on ${org.root_domain}?`,
-      message: [
-        `That is about ${total.toLocaleString()} individual checks across ${count.toLocaleString()} assets.`,
-        ...(total > 1000 ? ['A run this size can take a long time to finish.'] : []),
-      ],
-      confirmLabel: 'Run all scanners',
-      icon: 'play',
-    });
-    if (!confirmed) return;
+    if (!(await this.checkFirst(toStart.map((s) => s.name)))) return;
 
     this.isRunningAll.set(true);
     let started = 0;
@@ -176,35 +175,37 @@ export class Scanners implements OnDestroy {
     this.loadProgress(org.id);
   }
 
+  /** Shows the check before a scan; resolves true to go ahead. */
+  private checkFirst(names: string[]): Promise<boolean> {
+    return new Promise((resolve) => {
+      this.answerPreflight = resolve;
+      this.preflightFor.set(names);
+    });
+  }
+
+  onPreflight(go: boolean): void {
+    this.preflightFor.set(null);
+    this.answerPreflight?.(go);
+    this.answerPreflight = null;
+  }
+
   isRunning(scanner: ScannerInfo): boolean {
     const run = this.progress()[scanner.name];
     return !!run && !run.finished;
   }
 
-  /** Share of a run that has finished (succeeded or failed), 0-100. */
+  /** Share of a run that has finished (succeeded, failed or skipped), 0-100. */
   percentDone(run: ScanProgress): number {
-    return run.total ? ((run.success + run.failed) / run.total) * 100 : 0;
+    return run.total ? ((run.success + run.failed + run.skipped) / run.total) * 100 : 0;
   }
 
   async runScan(scanner: ScannerInfo): Promise<void> {
     const org = this.orgContext.selectedOrganization();
     if (!org || this.startingScanner()) return;
 
-    // One click can mean tens of thousands of scans; say so first.
-    const count = this.assetCount();
-    if (scanner.applies_to === 'asset' && count !== null && count > 1) {
-      const message = [`This starts one scan for each of ${org.name}'s assets.`];
-      if (count > 500) {
-        message.push('That is a lot of scans and can take a long time to finish.');
-      }
-      const confirmed = await this.confirm.ask({
-        title: `Run ${scanner.label} on all ${count.toLocaleString()} assets?`,
-        message,
-        confirmLabel: 'Run scan',
-        icon: scannerIcon(scanner.name),
-      });
-      if (!confirmed) return;
-    }
+    // One click can mean tens of thousands of scans: check what it will
+    // cover (and what will stop it) first.
+    if (scanner.applies_to === 'asset' && !(await this.checkFirst([scanner.name]))) return;
 
     this.startingScanner.set(scanner.name);
     this.errorMessage.set(null);
@@ -229,6 +230,7 @@ export class Scanners implements OnDestroy {
             running: 0,
             success: 0,
             failed: 0,
+            skipped: 0,
             finished: false,
           },
         }));

@@ -30,6 +30,7 @@
         <option value="running">Running</option>
         <option value="retrying">Retrying</option>
         <option value="pending">Pending</option>
+        <option value="skipped">Skipped</option>
       </select>
     }
   </div>
@@ -67,6 +68,7 @@
                 <span class="bar" aria-hidden="true">
                   <span class="ok" [style.width.%]="percent(run, run.succeeded)"></span>
                   <span class="bad" [style.width.%]="percent(run, run.failed)"></span>
+                  <span class="skip" [style.width.%]="percent(run, run.skipped)"></span>
                   <span class="wait" [style.width.%]="percent(run, run.unfinished)"></span>
                 </span>
                 <span class="counts">
@@ -76,6 +78,7 @@
                     {{ run.jobs | number }} {{ run.jobs === 1 ? 'scan' : 'scans' }}
                   }
                   @if (run.failed) { · <span class="failed">{{ run.failed | number }} failed</span> }
+                  @if (run.skipped) { · <span class="skipped" title="Hosts that no longer exist in DNS">{{ run.skipped | number }} skipped</span> }
                   @if (run.new_findings) { · <span class="found">{{ run.new_findings | number }} new {{ run.new_findings === 1 ? 'issue' : 'issues' }}</span> }
                 </span>
               </span>
@@ -83,6 +86,22 @@
             </button>
             @if (openRun() === run.run_id) {
               <div class="run-jobs">
+                @if (runReasons().length) {
+                  <div class="reasons">
+                    <h3>Why scans didn't finish</h3>
+                    <ul>
+                      @for (r of runReasons(); track $index) {
+                        <li>
+                          <span class="reason-count" [class.skipped]="r.status === 'skipped'">{{ r.count | number }}×</span>
+                          <span class="reason-text">
+                            {{ r.reason }}
+                            <small>{{ r.status === 'skipped' ? 'Skipped' : 'Failed' }} · {{ r.scanners.join(', ') }}@if (r.hosts.length) { · e.g. {{ r.hosts.slice(0, 3).join(', ') }} }</small>
+                          </span>
+                        </li>
+                      }
+                    </ul>
+                  </div>
+                }
                 <ng-container *ngTemplateOutlet="jobTable; context: { $implicit: runJobs(), origin: false }" />
                 @if (runJobCount() > 50) {
                   <app-pager [page]="runJobPage()" [count]="runJobCount()" (pageChange)="onRunJobPage($event)" />

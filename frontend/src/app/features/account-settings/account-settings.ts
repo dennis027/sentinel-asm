@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { DomSanitizer } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { apiErrorMessage } from '../../core/labels';
-import { ApiKey, SignInEvent, TwoFactorSetup } from '../../core/models/models';
+import { ApiKey, Profile, SignInEvent, TwoFactorSetup } from '../../core/models/models';
 import { AccountService, TwoFactorStatus } from '../../core/services/account.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ConfirmService } from '../../core/services/confirm.service';
@@ -13,9 +13,9 @@ import { environment } from '../../../environments/environment';
 import { Icon } from '../../shared/components/icon/icon';
 
 /**
- * The signed-in person's own security: password, two-factor sign-in,
- * read-only API keys for integrations, and recent sign-ins (to spot one
- * that wasn't them).
+ * The signed-in person's own account: name and email, password, signing
+ * out every device, two-factor sign-in, read-only API keys for
+ * integrations, and recent sign-ins (to spot one that wasn't them).
  */
 @Component({
   selector: 'app-account-settings',
@@ -31,6 +31,16 @@ export class AccountSettings {
   private readonly confirm = inject(ConfirmService);
   private readonly sanitizer = inject(DomSanitizer);
   protected readonly apiBase = environment.apiBaseUrl;
+
+  // --- profile ---
+  readonly profile = signal<Profile | null>(null);
+  readonly firstName = signal('');
+  readonly lastName = signal('');
+  readonly isSavingProfile = signal(false);
+  readonly newEmail = signal('');
+  readonly emailPassword = signal('');
+  readonly isChangingEmail = signal(false);
+  readonly emailError = signal<string | null>(null);
 
   // --- two-factor sign-in ---
   readonly twoFactor = signal<TwoFactorStatus | null>(null);
@@ -59,6 +69,71 @@ export class AccountSettings {
     this.account.twoFactorStatus().subscribe({ next: (s) => this.twoFactor.set(s), error: () => undefined });
     this.account.apiKeys().subscribe({ next: (keys) => this.apiKeys.set(keys), error: () => undefined });
     this.account.signIns().subscribe({ next: (events) => this.signIns.set(events), error: () => undefined });
+    this.account.me().subscribe({ next: (me) => this.setProfile(me), error: () => undefined });
+  }
+
+  // ---------------- profile ----------------
+
+  saveProfile(): void {
+    if (this.isSavingProfile()) return;
+    this.isSavingProfile.set(true);
+    this.account.updateProfile({ first_name: this.firstName().trim(), last_name: this.lastName().trim() }).subscribe({
+      next: (me) => {
+        this.isSavingProfile.set(false);
+        this.setProfile(me);
+        this.toasts.success('Name saved.');
+      },
+      error: (err) => {
+        this.isSavingProfile.set(false);
+        this.toasts.error(apiErrorMessage(err, 'Could not save your name.'));
+      },
+    });
+  }
+
+  changeEmail(): void {
+    if (this.isChangingEmail()) return;
+    this.isChangingEmail.set(true);
+    this.emailError.set(null);
+    this.account.changeEmail(this.newEmail().trim(), this.emailPassword()).subscribe({
+      next: (me) => {
+        this.isChangingEmail.set(false);
+        this.setProfile(me);
+        this.newEmail.set('');
+        this.emailPassword.set('');
+        this.toasts.success(`Email changed to ${me.email}. Your old address was told about the change.`);
+      },
+      error: (err) => {
+        this.isChangingEmail.set(false);
+        this.emailError.set(apiErrorMessage(err, 'Could not change your email address.'));
+      },
+    });
+  }
+
+  async signOutEverywhere(): Promise<void> {
+    const ok = await this.confirm.ask({
+      title: 'Sign out on every device?',
+      message: [
+        'Every browser and device signed in to your account is signed out, including this one.',
+        'Do this if you lost a device or signed in somewhere you shouldn\'t have stayed signed in.',
+      ],
+      confirmLabel: 'Sign out everywhere',
+      danger: true,
+      icon: 'logout',
+    });
+    if (!ok) return;
+    this.account.signOutEverywhere().subscribe({
+      next: () => {
+        this.auth.clearSession();
+        this.router.navigate(['/login'], { queryParams: { message: 'Signed out on every device.' } });
+      },
+      error: () => this.toasts.error('Could not sign out the other devices.'),
+    });
+  }
+
+  private setProfile(me: Profile): void {
+    this.profile.set(me);
+    this.firstName.set(me.first_name);
+    this.lastName.set(me.last_name);
   }
 
   startTwoFactor(): void {

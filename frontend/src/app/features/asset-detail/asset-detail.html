@@ -129,9 +129,47 @@
             <label for="tags">Labels</label>
             <input id="tags" name="tags" placeholder="payments, production" [ngModel]="editTags()" (ngModelChange)="editTags.set($event)" />
             <p class="hint">Separate with commas. Issues on crown jewels go to the top of the fix plan.</p>
+            <label for="owner">Owner</label>
+            <select id="owner" name="owner" [ngModel]="editOwner()" (ngModelChange)="editOwner.set($event)">
+              <option value="">Nobody</option>
+              @for (m of members(); track m.user_id) {
+                <option [value]="m.user_id">{{ m.username }}</option>
+              }
+            </select>
+            <p class="hint">New issues found on this host are assigned to its owner.</p>
             <button class="btn small" type="submit" [disabled]="isSaving()">{{ isSaving() ? 'Saving…' : 'Save' }}</button>
           </form>
         }
+
+        <div class="panel web-facts">
+          <p class="panel-title">On the web</p>
+          @let status = webStatus(a.web);
+          <dl>
+            <dt>Response</dt>
+            <dd><span class="web-status tone-{{ status.tone }}">{{ status.text }}</span>
+              @if (a.web.response_ms !== undefined) { <span class="muted">{{ a.web.response_ms }} ms</span> }</dd>
+            @if (a.web.title) {
+              <dt>Page title</dt>
+              <dd>{{ a.web.title }}</dd>
+            }
+            @if (a.web.final_url) {
+              <dt>Lands on</dt>
+              <dd class="wrap">{{ a.web.final_url }}</dd>
+            }
+            <dt>Hosted on</dt>
+            <dd>{{ a.hosting.provider || (a.hosting.checked_at ? 'Not identified' : 'Not checked yet') }}</dd>
+            @if (a.hosting.ips?.length) {
+              <dt>Addresses</dt>
+              <dd class="wrap mono">{{ a.hosting.ips!.join(', ') }}</dd>
+            }
+            @if (a.hosting.cnames?.length) {
+              <dt>Points to</dt>
+              <dd class="wrap mono">{{ a.hosting.cnames!.join(' → ') }}</dd>
+            }
+            <dt>Owner</dt>
+            <dd>{{ a.owner_name || 'Nobody' }}</dd>
+          </dl>
+        </div>
 
         <div class="panel">
           <p class="panel-title">Certificate</p>

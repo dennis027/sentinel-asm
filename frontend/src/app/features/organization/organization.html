@@ -244,30 +244,68 @@
       </table>
 
       @if (orgContext.canManageSettings()) {
-        <form class="add-member" (ngSubmit)="addMember()">
+        @if (invitations().length) {
+          <h3 class="sub">Waiting to join</h3>
+          <ul class="invites">
+            @for (inv of invitations(); track inv.id) {
+              <li>
+                <span class="inv-who">
+                  <strong>{{ inv.email }}</strong>
+                  <span class="muted">{{ inv.role_label }} · invited by {{ inv.invited_by || 'someone' }} · expires {{ inv.expires_at | date: 'MMM d' }}</span>
+                </span>
+                <span class="inv-actions">
+                  <button class="btn secondary small" (click)="resendInvitation(inv)">Resend</button>
+                  <button class="btn secondary small" (click)="cancelInvitation(inv)">Cancel</button>
+                </span>
+              </li>
+            }
+          </ul>
+        }
+
+        @if (lastInvite()?.invite_link; as link) {
+          <div class="invite-link" role="status">
+            <p>
+              @if (lastInvite()?.email_sent) {
+                Emailed to <strong>{{ lastInvite()?.email }}</strong>. You can also share the link yourself; it's shown only now.
+              } @else {
+                Email isn't set up on this server, so send <strong>{{ lastInvite()?.email }}</strong> this link yourself. It's shown only now.
+              }
+            </p>
+            <div class="link-row">
+              <code>{{ link }}</code>
+              <button class="btn secondary small" (click)="copyInviteLink()"><app-icon name="copy" [size]="13" /> Copy</button>
+            </div>
+          </div>
+        }
+
+        <form class="add-member" (ngSubmit)="invite()">
           <input
-            name="identifier"
-            placeholder="Username or email"
-            aria-label="Username or email of the person to add"
+            name="email"
+            type="email"
+            placeholder="name@company.com"
+            aria-label="Email address to invite"
             autocapitalize="off"
-            [ngModel]="newMemberIdentifier()"
-            (ngModelChange)="newMemberIdentifier.set($event)"
+            [ngModel]="inviteEmail()"
+            (ngModelChange)="inviteEmail.set($event)"
           />
           <select
             name="role"
-            aria-label="Role for the new member"
-            [ngModel]="newMemberRole()"
-            (ngModelChange)="newMemberRole.set($event)"
+            aria-label="Role for the invited person"
+            [ngModel]="inviteRole()"
+            (ngModelChange)="inviteRole.set($event)"
           >
             @for (role of assignableRoles(); track role.value) {
               <option [value]="role.value">{{ role.label }}</option>
             }
           </select>
-          <button class="btn" type="submit" [disabled]="isAddingMember() || !newMemberIdentifier().trim()">
-            Add member
+          <button class="btn" type="submit" [disabled]="isInviting() || !inviteEmail().includes('@')">
+            {{ isInviting() ? 'Inviting…' : 'Invite' }}
           </button>
         </form>
-        <p class="hint">The person needs an account on this server first.</p>
+        <p class="hint">
+          They get an email with a link to join (it works once and expires in 7 days). New people create their
+          account from it; people who already have one sign in to accept.
+        </p>
       }
 
       <details class="role-help">

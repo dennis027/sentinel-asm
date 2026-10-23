@@ -1,0 +1,118 @@
+<div class="page">
+  <div class="header">
+    <div>
+      <h1>Policies</h1>
+      <p class="muted">Rules for what {{ orgContext.selectedOrganization()?.name }} may expose. Every host that breaks one gets a finding, checked after each scan.</p>
+    </div>
+    @if (orgContext.canManageSettings() && !editing()) {
+      <button class="btn" (click)="start()"><app-icon name="plus" [size]="14" /> New policy</button>
+    }
+  </div>
+
+  @if (editing()) {
+    <form class="panel policy-form" (ngSubmit)="save()">
+      <div class="grid">
+        <label class="wide">
+          Name
+          <input name="name" maxlength="120" placeholder="No Remote Desktop on the internet"
+            [ngModel]="draft().name" (ngModelChange)="patch({ name: $event })" />
+        </label>
+        <label>
+          Rule
+          <select name="kind" [ngModel]="draft().kind" (ngModelChange)="patch({ kind: $event, value: '' })">
+            @for (k of kinds; track k.value) {
+              <option [value]="k.value">{{ k.label }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          Value
+          <input name="value" maxlength="120" [placeholder]="kindInfo().placeholder" spellcheck="false"
+            [ngModel]="draft().value" (ngModelChange)="patch({ value: $event })" />
+          <small>{{ kindInfo().hint }}</small>
+        </label>
+        <label>
+          Severity of a breach
+          <select name="severity" [ngModel]="draft().severity" (ngModelChange)="patch({ severity: $event })">
+            @for (s of severities; track s) {
+              <option [value]="s">{{ s.charAt(0).toUpperCase() + s.slice(1) }}</option>
+            }
+          </select>
+        </label>
+        <label class="wide">
+          What to do about it <span class="optional">optional</span>
+          <textarea name="guidance" rows="2" maxlength="1000" placeholder="Shown on every finding this policy raises."
+            [ngModel]="draft().guidance" (ngModelChange)="patch({ guidance: $event })"></textarea>
+        </label>
+      </div>
+      @if (formError()) {
+        <p class="error" role="alert">{{ formError() }}</p>
+      }
+      <div class="actions">
+        <button class="btn" type="submit" [disabled]="saving() || !draft().name.trim() || !draft().value.trim()">
+          {{ saving() ? 'Checking every host…' : 'Add policy' }}
+        </button>
+        <button class="btn secondary" type="button" (click)="editing.set(false)">Cancel</button>
+      </div>
+    </form>
+  }
+
+  @if (isLoading()) {
+    <p class="loading">Loading…</p>
+  } @else {
+    @if (policies().length) {
+      @if (breakingTotal()) {
+        <p class="summary"><strong>{{ breakingTotal() }}</strong> {{ breakingTotal() === 1 ? 'breach' : 'breaches' }} of your policies right now.
+          <a routerLink="/findings" [queryParams]="{ type: 'policy_violation' }">See them in Findings</a></p>
+      } @else {
+        <p class="summary ok"><app-icon name="check" [size]="14" /> Every host follows your policies.</p>
+      }
+      <ul class="policies">
+        @for (p of policies(); track p.id) {
+          <li class="panel policy" [class.off]="!p.enabled">
+            <span class="policy-icon"><app-icon [name]="iconFor(p.kind)" [size]="16" /></span>
+            <div class="policy-main">
+              <p class="policy-name">{{ p.name }}</p>
+              <p class="policy-rule">{{ p.rule.charAt(0).toUpperCase() + p.rule.slice(1) }} · <span class="badge severity-{{ p.severity }}">{{ p.severity }}</span></p>
+              @if (p.guidance) { <p class="policy-guidance">{{ p.guidance }}</p> }
+            </div>
+            <div class="policy-state">
+              @if (!p.enabled) {
+                <span class="muted">Off</span>
+              } @else if (p.breaking) {
+                <a class="breaking" routerLink="/findings" [queryParams]="{ type: 'policy_violation', q: p.name }">{{ p.breaking }} {{ p.breaking === 1 ? 'host breaks it' : 'hosts break it' }}</a>
+              } @else {
+                <span class="passing"><app-icon name="check" [size]="13" /> All hosts pass</span>
+              }
+            </div>
+            @if (orgContext.canManageSettings()) {
+              <div class="policy-actions">
+                <button class="btn secondary small" (click)="toggle(p)">{{ p.enabled ? 'Turn off' : 'Turn on' }}</button>
+                <button class="btn secondary small danger-text" (click)="remove(p)" [attr.aria-label]="'Delete ' + p.name"><app-icon name="x" [size]="13" /></button>
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    } @else if (!editing()) {
+      <app-empty-state art="shield" title="No policies yet">
+        A policy says what must never be on the internet, like Remote Desktop or a development server, and flags any host that breaks it.
+      </app-empty-state>
+    }
+
+    @if (orgContext.canManageSettings() && suggestions().length && !editing()) {
+      <section class="examples">
+        <h2>Common policies</h2>
+        <div class="example-grid">
+          @for (e of suggestions(); track e.name) {
+            <button class="example" (click)="start(e)">
+              <span class="policy-icon"><app-icon [name]="iconFor(e.kind)" [size]="15" /></span>
+              <strong>{{ e.name }}</strong>
+              <span>{{ e.why }}</span>
+            </button>
+          }
+        </div>
+      </section>
+    }
+  }
+</div>

@@ -2,9 +2,54 @@
   <div class="header">
     <div>
       <h1>Account settings</h1>
-      <p class="muted">Your password, two-factor sign-in, API keys and recent sign-ins.</p>
+      <p class="muted">Your name and email, password, two-factor sign-in, API keys and recent sign-ins.</p>
     </div>
   </div>
+
+  @if (profile(); as me) {
+    <div class="panel">
+      <h2><app-icon name="users" [size]="18" /> Profile</h2>
+      <dl class="facts-inline">
+        <dt>Username</dt><dd>{{ me.username }}</dd>
+        <dt>Email</dt><dd>{{ me.email || 'none set' }}</dd>
+        <dt>Member since</dt><dd>{{ me.date_joined | date: 'MMM d, y' }}</dd>
+      </dl>
+      <form (ngSubmit)="saveProfile()" class="row-form">
+        <div>
+          <label for="first-name">First name</label>
+          <input id="first-name" name="first" autocomplete="given-name" maxlength="150"
+                 [ngModel]="firstName()" (ngModelChange)="firstName.set($event)" />
+        </div>
+        <div>
+          <label for="last-name">Last name</label>
+          <input id="last-name" name="last" autocomplete="family-name" maxlength="150"
+                 [ngModel]="lastName()" (ngModelChange)="lastName.set($event)" />
+        </div>
+        <button class="btn secondary" type="submit"
+                [disabled]="isSavingProfile() || (firstName() === me.first_name && lastName() === me.last_name)">
+          Save name
+        </button>
+      </form>
+
+      <h3>Change email address</h3>
+      <p class="muted">Used for password resets and alerts, and to sign in. Your current address is told about the change.</p>
+      <form (ngSubmit)="changeEmail()">
+        <label for="new-email">New email address</label>
+        <input id="new-email" name="new-email" type="email" autocomplete="email"
+               [ngModel]="newEmail()" (ngModelChange)="newEmail.set($event)" />
+        <label for="email-password">Current password</label>
+        <input id="email-password" name="email-password" type="password" autocomplete="current-password"
+               [ngModel]="emailPassword()" (ngModelChange)="emailPassword.set($event)" />
+        @if (emailError()) {
+          <p class="error" role="alert">{{ emailError() }}</p>
+        }
+        <button class="btn secondary" type="submit"
+                [disabled]="isChangingEmail() || !newEmail().includes('@') || !emailPassword()">
+          {{ isChangingEmail() ? 'Changing…' : 'Change email' }}
+        </button>
+      </form>
+    </div>
+  }
 
   <div class="panel">
     <h2>Password</h2>
@@ -48,6 +93,12 @@
         {{ isSubmitting() ? 'Changing…' : 'Change password' }}
       </button>
     </form>
+
+    <h3>Sessions</h3>
+    <p class="muted">Lost a device, or signed in on a shared computer? End every session at once.</p>
+    <button class="btn secondary" type="button" (click)="signOutEverywhere()">
+      <app-icon name="logout" [size]="14" /> Sign out on every device
+    </button>
   </div>
 
   <section class="panel">

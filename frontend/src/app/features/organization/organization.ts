@@ -2,7 +2,7 @@ import { Component, computed, effect, inject, signal, untracked } from '@angular
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ROLES, apiErrorMessage, roleLabel } from '../../core/labels';
-import { Member, OrgRole, Organization } from '../../core/models/models';
+import { Invitation, Member, OrgRole, Organization } from '../../core/models/models';
 import { AuthService } from '../../core/services/auth.service';
 import { OrganizationContextService } from '../../core/services/organization-context-service';
 import { OrganizationService } from '../../core/services/organization-service';
@@ -52,9 +52,12 @@ export class OrganizationPage {
   // --- members ---
   readonly members = signal<Member[]>([]);
   readonly membersError = signal<string | null>(null);
-  readonly newMemberIdentifier = signal('');
-  readonly newMemberRole = signal<OrgRole>('viewer');
-  readonly isAddingMember = signal(false);
+  readonly invitations = signal<Invitation[]>([]);
+  readonly inviteEmail = signal('');
+  readonly inviteRole = signal<OrgRole>('viewer');
+  readonly isInviting = signal(false);
+  // The link of the invitation just sent or resent: shown once, to copy.
+  readonly lastInvite = signal<Invitation | null>(null);
 
   // --- policy: days to fix, and hosts never to scan ---
   protected readonly slaSeverities = ['critical', 'high', 'medium', 'low'] as const;
@@ -87,6 +90,8 @@ export class OrganizationPage {
         this.deleteConfirmation.set('');
         this.deleteError.set(null);
         this.members.set([]);
+        this.invitations.set([]);
+        this.lastInvite.set(null);
         this.policyError.set(null);
         this.slaDraft.set({ ...(org?.sla_days ?? {}) });
         this.scopeDraft.set((org?.scope_exclusions ?? []).join('\n'));
@@ -221,28 +226,77 @@ export class OrganizationPage {
     return member.role !== 'owner' || this.isOwner();
   }
 
-  addMember(): void {
-    const org = this.org();
-    const identifier = this.newMemberIdentifier().trim();
-    if (!org || !identifier) return;
+  // ---------------- invitations ----------------
 
-    this.isAddingMember.set(true);
+  invite(): void {
+    const org = this.org();
+    const email = this.inviteEmail().trim();
+    if (!org || !email || this.isInviting()) return;
+    this.isInviting.set(true);
     this.membersError.set(null);
-    this.orgService.addMember(org.id, identifier, this.newMemberRole()).subscribe({
-      next: (member) => {
-        this.isAddingMember.set(false);
-        this.newMemberIdentifier.set('');
-        this.newMemberRole.set('viewer');
-        this.members.update((members) =>
-          [...members, member].sort((a, b) => a.username.localeCompare(b.username)),
+    this.orgService.invite(org.id, email, this.inviteRole()).subscribe({
+      next: (invitation) => {
+        this.isInviting.set(false);
+        this.inviteEmail.set('');
+        this.inviteRole.set('viewer');
+        this.invitations.update((list) => [invitation, ...list]);
+        this.lastInvite.set(invitation);
+        this.toasts.success(
+          invitation.email_sent
+            ? `Invitation emailed to ${invitation.email}.`
+            : `Invitation created. Email isn't set up, so copy the link and send it to ${invitation.email}.`,
         );
-        this.toasts.success(`${member.username} added as ${roleLabel(member.role)}.`);
       },
       error: (err) => {
-        this.isAddingMember.set(false);
-        this.membersError.set(apiErrorMessage(err, 'Could not add that person.'));
+        this.isInviting.set(false);
+        this.membersError.set(apiErrorMessage(err, 'Could not send the invitation.'));
       },
     });
+  }
+
+  resendInvitation(invitation: Invitation): void {
+    const org = this.org();
+    if (!org) return;
+    this.orgService.resendInvitation(org.id, invitation.id).subscribe({
+      next: (fresh) => {
+        this.invitations.update((list) => list.map((i) => (i.id === fresh.id ? fresh : i)));
+        this.lastInvite.set(fresh);
+        this.toasts.success(
+          fresh.email_sent ? `Sent again to ${fresh.email}. The old link no longer works.` : 'New link created; the old one no longer works.',
+        );
+      },
+      error: (err) => this.membersError.set(apiErrorMessage(err, 'Could not resend the invitation.')),
+    });
+  }
+
+  async cancelInvitation(invitation: Invitation): Promise<void> {
+    const org = this.org();
+    if (!org) return;
+    const ok = await this.confirm.ask({
+      title: `Cancel the invitation for ${invitation.email}?`,
+      message: 'The link stops working straight away. You can invite them again later.',
+      confirmLabel: 'Cancel invitation',
+      cancelLabel: 'Keep it',
+      danger: true,
+    });
+    if (!ok) return;
+    this.orgService.cancelInvitation(org.id, invitation.id).subscribe({
+      next: () => {
+        this.invitations.update((list) => list.filter((i) => i.id !== invitation.id));
+        if (this.lastInvite()?.id === invitation.id) this.lastInvite.set(null);
+        this.toasts.success('Invitation cancelled.');
+      },
+      error: (err) => this.membersError.set(apiErrorMessage(err, 'Could not cancel the invitation.')),
+    });
+  }
+
+  copyInviteLink(): void {
+    const link = this.lastInvite()?.invite_link;
+    if (!link) return;
+    navigator.clipboard
+      ?.writeText(link)
+      .then(() => this.toasts.success('Link copied.'))
+      .catch(() => this.toasts.error('Could not copy; select the link and copy it.'));
   }
 
   changeRole(member: Member, role: OrgRole): void {
@@ -339,5 +393,11 @@ export class OrganizationPage {
       next: (members) => this.members.set(members),
       error: () => this.membersError.set('Could not load members.'),
     });
+    if (this.orgContext.canManageSettings()) {
+      this.orgService.invitations(orgId).subscribe({
+        next: (invitations) => this.invitations.set(invitations),
+        error: () => undefined,
+      });
+    }
   }
 }

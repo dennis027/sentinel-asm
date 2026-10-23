@@ -79,12 +79,15 @@
                 </div>
                 <p class="run-text">
                   @if (run.total > 1) {
-                    {{ run.success + run.failed | number }} of {{ run.total | number }} done
+                    {{ run.success + run.failed + run.skipped | number }} of {{ run.total | number }} done
                   } @else {
                     Running…
                   }
                   @if (run.failed) {
                     · <span class="failed">{{ run.failed | number }} failed</span>
+                  }
+                  @if (run.skipped) {
+                    · <span class="skipped" title="Hosts that no longer exist in DNS">{{ run.skipped | number }} skipped</span>
                   }
                 </p>
               </div>
@@ -94,6 +97,9 @@
                 {{ run.success | number }} finished
                 @if (run.failed) {
                   · <span class="failed">{{ run.failed | number }} failed</span>
+                }
+                @if (run.skipped) {
+                  · <span class="skipped" title="Hosts that no longer exist in DNS">{{ run.skipped | number }} skipped</span>
                 }
                 ·
                 <a routerLink="/findings">See findings</a>
@@ -120,5 +126,9 @@
     </div>
     </section>
     }
+  }
+
+  @if (preflightFor(); as names) {
+    <app-preflight-dialog [scanners]="names" (decided)="onPreflight($event)" />
   }
 </div>

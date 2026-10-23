@@ -39,3 +39,45 @@
 .days { font-size: 13px; }
 .late { color: var(--color-danger); font-weight: 600; }
 .soon { color: var(--color-warning); font-weight: 600; }
+
+.hosting-summary { margin: 0 0 var(--space-3); font-size: 13.5px; }
+
+.providers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-3);
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  list-style: none;
+
+  li { margin: 0; padding: var(--space-4); }
+  .unknown { border-style: dashed; }
+}
+
+.provider-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  strong { font-size: 15px; }
+  a { font-size: 13px; font-weight: 600; }
+}
+
+.share {
+  height: 6px;
+  margin: var(--space-2) 0;
+  border-radius: 999px;
+  background: var(--color-surface-alt);
+  overflow: hidden;
+  span { display: block; height: 100%; border-radius: inherit; background: var(--color-accent); }
+}
+
+.provider-hosts {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  word-break: break-word;
+}
+
+.shared-title { margin: 0 0 4px; font-size: 15px; }
+.shared-hint { margin: 0 0 var(--space-3); font-size: 13px; }

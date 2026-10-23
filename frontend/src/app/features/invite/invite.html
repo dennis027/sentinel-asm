@@ -1,0 +1,84 @@
+<app-auth-card [heading]="invitation() ? 'Join ' + invitation()!.organization : 'Invitation'">
+  @switch (mode()) {
+    @case ('loading') {
+      <p class="muted">Checking the invitation…</p>
+    }
+    @case ('invalid') {
+      <p class="error" role="alert">{{ problem() }}</p>
+      <p class="muted">Ask the person who invited you to send it again.</p>
+      <a class="btn block" routerLink="/login">Go to sign in</a>
+    }
+    @case ('gone') {
+      <p class="error" role="alert">{{ invitation()!.detail }}</p>
+      <a class="btn block" routerLink="/login">Go to sign in</a>
+    }
+    @default {
+      @if (invitation(); as i) {
+        <p class="summary">
+          {{ i.invited_by || 'Someone' }} invited <strong>{{ i.email }}</strong> to join
+          <strong>{{ i.organization }}</strong> as <strong>{{ i.role_label }}</strong>.
+        </p>
+        <p class="muted small">The invitation expires {{ i.expires_at | date: 'MMM d, y, HH:mm' }}.</p>
+
+        @switch (mode()) {
+          @case ('join') {
+            <button class="btn block" (click)="join()" [disabled]="busy()">
+              {{ busy() ? 'Joining…' : 'Join ' + i.organization }}
+            </button>
+          }
+          @case ('wrong-account') {
+            <p class="warn" role="alert">
+              You're signed in as <strong>{{ signedInAs() }}</strong>, but this invitation is for
+              <strong>{{ i.email }}</strong>.
+            </p>
+            <button class="btn block" (click)="switchAccount()">Sign out and continue as {{ i.email }}</button>
+          }
+          @case ('sign-in') {
+            <p class="muted">{{ i.email }} already has a Densight account. Sign in with it to accept.</p>
+            <a class="btn block" routerLink="/login" [queryParams]="signInLink()">Sign in to accept</a>
+            <p class="alt"><a routerLink="/forgot-password">Forgot the password?</a></p>
+          }
+          @case ('create') {
+            <p class="muted">Create your account. You'll sign in with <strong>{{ i.email }}</strong>.</p>
+            <form (ngSubmit)="createAccount()">
+              <div class="names">
+                <div>
+                  <label for="first">First name</label>
+                  <input id="first" name="first" autocomplete="given-name" [ngModel]="firstName()" (ngModelChange)="firstName.set($event)" />
+                </div>
+                <div>
+                  <label for="last">Last name</label>
+                  <input id="last" name="last" autocomplete="family-name" [ngModel]="lastName()" (ngModelChange)="lastName.set($event)" />
+                </div>
+              </div>
+              <label for="email">Email</label>
+              <input id="email" name="email" [value]="i.email" disabled />
+              <label for="password">Password</label>
+              <input id="password" name="password" type="password" autocomplete="new-password"
+                     [ngModel]="password()" (ngModelChange)="password.set($event)" />
+              <label for="confirm">Type it again</label>
+              <input id="confirm" name="confirm" type="password" autocomplete="new-password"
+                     [ngModel]="confirm()" (ngModelChange)="confirm.set($event)" />
+              <p class="muted small">At least 8 characters, not a common password, not too close to your name or email.</p>
+              @if (mismatch()) {
+                <p class="error">The two passwords don't match.</p>
+              }
+              @for (e of errors(); track e) {
+                <p class="error" role="alert">{{ e }}</p>
+              }
+              <button class="btn block" type="submit" [disabled]="busy() || !password() || mismatch()">
+                {{ busy() ? 'Creating your account…' : 'Create account and join' }}
+              </button>
+            </form>
+            <p class="alt">Already have an account with another address? Ask for the invitation to be sent there.</p>
+          }
+        }
+        @if (mode() !== 'create') {
+          @for (e of errors(); track e) {
+            <p class="error" role="alert">{{ e }}</p>
+          }
+        }
+      }
+    }
+  }
+</app-auth-card>

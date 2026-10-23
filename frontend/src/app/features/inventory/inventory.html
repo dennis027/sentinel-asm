@@ -2,7 +2,7 @@
   <div class="header">
     <div>
       <h1>Inventory</h1>
-      <p class="muted">What {{ orgContext.selectedOrganization()?.name }} runs on the internet: software, open services and certificates.</p>
+      <p class="muted">What {{ orgContext.selectedOrganization()?.name }} runs on the internet: software, open services, certificates and where it is hosted.</p>
     </div>
   </div>
 
@@ -19,12 +19,15 @@
         <span class="n warn" title="Expired or expiring within 30 days">{{ expiringSoon() }} soon</span>
       }
     </button>
+    <button role="tab" [attr.aria-selected]="tab() === 'hosting'" [class.active]="tab() === 'hosting'" (click)="select('hosting')">
+      <app-icon name="cloud" [size]="15" /> Hosting <span class="n">{{ providerCount() }}</span>
+    </button>
   </div>
 
   <div class="controls">
     <input
       type="search"
-      [placeholder]="tab() === 'software' ? 'Search software, e.g. nginx or WordPress' : tab() === 'services' ? 'Search port or service, e.g. 3389' : 'Search host'"
+      [placeholder]="tab() === 'software' ? 'Search software, e.g. nginx or WordPress' : tab() === 'services' ? 'Search port or service, e.g. 3389' : tab() === 'hosting' ? 'Search provider or host, e.g. AWS' : 'Search host'"
       aria-label="Filter the inventory"
       [ngModel]="filter()"
       (ngModelChange)="filter.set($event)"
@@ -138,6 +141,58 @@
               }
             </tbody>
           </table>
+        }
+      }
+      @case ('hosting') {
+        @if (hosting(); as h) {
+          @if (!h.providers.length && !h.unknown.count) {
+            <app-empty-state art="servers" title="Not checked yet">
+              The DNS records scanner works out where each host is hosted. Run it from <a routerLink="/scanners">Scanners</a>.
+            </app-empty-state>
+          } @else {
+            <p class="hosting-summary muted">
+              {{ h.addresses }} addresses across {{ h.providers.length }} {{ h.providers.length === 1 ? 'provider' : 'providers' }}.
+              @if (h.unknown.count) { {{ h.unknown.count }} hosts are on servers we couldn't identify. }
+              @if (h.unchecked) { {{ h.unchecked }} not checked yet. }
+            </p>
+            <ul class="providers">
+              @for (p of shownProviders(); track p.provider) {
+                <li class="panel">
+                  <div class="provider-head">
+                    <strong>{{ p.provider }}</strong>
+                    <a [routerLink]="['/assets']" [queryParams]="{ q: 'provider:' + p.provider }">{{ p.count }} {{ p.count === 1 ? 'host' : 'hosts' }}</a>
+                  </div>
+                  <div class="share"><span [style.width.%]="p.share"></span></div>
+                  <p class="provider-hosts">{{ p.hosts.join(', ') }}@if (p.count > p.hosts.length) {, …}</p>
+                </li>
+              }
+              @if (h.unknown.count && !filter()) {
+                <li class="panel unknown">
+                  <div class="provider-head">
+                    <strong>Not identified</strong>
+                    <a [routerLink]="['/assets']" [queryParams]="{ q: 'provider:none' }">{{ h.unknown.count }} {{ h.unknown.count === 1 ? 'host' : 'hosts' }}</a>
+                  </div>
+                  <p class="provider-hosts">Own servers, or a provider not on our list. {{ h.unknown.hosts.join(', ') }}@if (h.unknown.count > h.unknown.hosts.length) {, …}</p>
+                </li>
+              }
+            </ul>
+            @if (h.shared_addresses.length) {
+              <h2 class="shared-title">Addresses behind several names</h2>
+              <p class="muted shared-hint">One server answering for many host names: patching or losing it affects all of them.</p>
+              <table>
+                <thead><tr><th>Address</th><th>Names</th><th>Hosts</th></tr></thead>
+                <tbody>
+                  @for (a of h.shared_addresses; track a.address) {
+                    <tr>
+                      <td><code>{{ a.address }}</code></td>
+                      <td>{{ a.count }}</td>
+                      <td class="muted">{{ a.hosts.join(', ') }}@if (a.count > a.hosts.length) {, …}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          }
         }
       }
     }

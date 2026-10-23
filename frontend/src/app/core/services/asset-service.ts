@@ -11,6 +11,9 @@ export interface AssetFilters {
   criticality?: Criticality;
   tag?: string;
   search?: string;
+  // The search language: "tech:nginx provider:aws payments" (see apps/assets/query.py).
+  q?: string;
+  owner?: number;
   page?: number;
   page_size?: number;
 }
@@ -39,8 +42,8 @@ export class AssetService {
     return this.http.get<Asset>(`${this.base}/${id}/`);
   }
 
-  /** Business context: how much the host matters, and labels. */
-  update(id: string, change: { criticality?: Criticality; tags?: string[] }): Observable<Asset> {
+  /** Business context: how much the host matters, labels, and who owns it. */
+  update(id: string, change: { criticality?: Criticality; tags?: string[]; owner?: number | null }): Observable<Asset> {
     return this.http.patch<Asset>(`${this.base}/${id}/`, change);
   }
 

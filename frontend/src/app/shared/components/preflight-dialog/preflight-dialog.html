@@ -1,0 +1,92 @@
+<!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->
+<div class="backdrop" (click)="decided.emit(false)">
+  <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events -->
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="preflight-title" (click)="$event.stopPropagation()">
+    <div class="head">
+      <span class="mark"><app-icon name="shield-check" [size]="20" /></span>
+      <div>
+        <h2 id="preflight-title">Before the scan</h2>
+        <p class="lede">Checked just now: what this scan will cover and anything that would stop it.</p>
+      </div>
+    </div>
+
+    @if (failed()) {
+      <p class="error">Could not run the checks. You can still start the scan.</p>
+    } @else if (check(); as c) {
+      <div class="stats">
+        <div>
+          <strong>{{ c.hosts.in_scope | number }}</strong>
+          <span>hosts in scope</span>
+          @if (c.hosts.excluded) { <em>{{ c.hosts.excluded | number }} on the never-scan list</em> }
+        </div>
+        <div [class.warn]="!hostsOk()">
+          <strong>{{ c.hosts.resolves | number }}<small>/{{ c.hosts.checked | number }}</small></strong>
+          <span>still exist in DNS</span>
+          @if (c.hosts.checked < c.hosts.in_scope) { <em>a sample of the most important</em> }
+        </div>
+        <div>
+          <strong>{{ c.jobs | number }}</strong>
+          <span>scans to run</span>
+          <em>{{ duration(c.estimated_seconds) }}</em>
+        </div>
+      </div>
+
+      @if (c.warnings.length) {
+        <ul class="warnings">
+          @for (w of c.warnings; track $index) {
+            <li><app-icon name="file-alert" [size]="14" /> {{ w }}</li>
+          }
+        </ul>
+      } @else {
+        <p class="all-clear"><app-icon name="check" [size]="14" /> Everything checks out.</p>
+      }
+
+      @if (c.hosts.missing_hosts.length) {
+        <details>
+          <summary>Hosts that no longer exist ({{ c.hosts.missing }})</summary>
+          <p class="hosts">{{ c.hosts.missing_hosts.join(', ') }}@if (c.hosts.missing > c.hosts.missing_hosts.length) {, …}</p>
+          <p class="hint">Scans that connect to a host skip these instead of failing. If they are gone for good, mark them out of scope.</p>
+        </details>
+      }
+
+      <details [open]="c.scanners.length <= 3">
+        <summary>Scanners ({{ runnable().length }} of {{ c.scanners.length }} ready)</summary>
+        <table>
+          <tbody>
+            @for (s of c.scanners; track s.name) {
+              <tr>
+                <td>{{ s.label }}</td>
+                <td class="num">{{ s.targets | number }} {{ s.targets === 1 ? 'target' : 'targets' }}</td>
+                <td>
+                  @if (s.missing_tools.length) {
+                    <span class="state bad">Can't run</span>
+                  } @else if (s.running) {
+                    <span class="state busy">Running</span>
+                  } @else if (s.likely_skipped) {
+                    <span class="state warn" title="Hosts that no longer exist in DNS">~{{ s.likely_skipped | number }} skipped</span>
+                  } @else {
+                    <span class="state ok">Ready</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </details>
+    } @else {
+      <p class="loading"><span class="spinner"></span> Resolving host names and checking the scan worker…</p>
+    }
+
+    <div class="actions">
+      <button class="btn secondary" type="button" (click)="decided.emit(false)">Cancel</button>
+      <button class="btn" type="button" [disabled]="!!check() && !check()!.ready" (click)="decided.emit(true)">
+        <app-icon name="play" [size]="14" />
+        @if (check(); as c) {
+          Start {{ runnable().length === 1 ? runnable()[0].label : runnable().length + ' scanners' }}
+        } @else {
+          Start anyway
+        }
+      </button>
+    </div>
+  </div>
+</div>

@@ -12,6 +12,17 @@
   background: var(--sidebar-bg);
   color: var(--sidebar-text);
   overflow-y: auto;
+  overflow-x: hidden;
+  // A thin scrollbar that only shows while the pointer is over the sidebar.
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: width 0.16s ease;
+
+  &:hover { scrollbar-color: var(--sidebar-border) transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar { transition: none; }
 }
 
 .brand-row {
@@ -95,7 +106,7 @@ nav {
 }
 
 .nav-group {
-  margin: var(--space-3) 0 2px;
+  margin: 10px 0 2px;
   padding: 0 var(--space-3);
   font-size: 11px;
   font-weight: 600;
@@ -108,7 +119,8 @@ nav {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  height: 33px;
+  height: 32px;
+  flex-shrink: 0;
   padding: 0 var(--space-3);
   border-radius: var(--radius-sm);
   font-size: 13.5px;
@@ -167,6 +179,21 @@ nav {
       color: var(--sidebar-text-strong);
     }
   }
+}
+
+.collapse {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: calc(100% - 2 * var(--space-2));
+  height: 30px;
+  margin: 0 var(--space-2) var(--space-2);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--sidebar-text-muted);
+  font-size: 12.5px;
+
+  &:hover { background: var(--sidebar-hover); color: var(--sidebar-text-strong); }
 }
 
 .account {
@@ -233,6 +260,49 @@ nav {
   overflow-y: auto;
 }
 
+// Collapsed: a rail of icons. Labels show as tooltips.
+@media (min-width: 821px) {
+  .sidebar.collapsed {
+    width: 68px;
+    padding-left: 10px;
+    padding-right: 10px;
+
+    .brand-row { justify-content: center; flex-direction: column; gap: var(--space-2); }
+    .brand { padding: 0; }
+    .brand-name, .org, .search-button span, .search-button kbd, .username, .collapse span { display: none; }
+    .search-button { justify-content: center; margin: 0 0 var(--space-2); padding: 0; }
+    .nav-group {
+      height: 1px;
+      margin: 9px 6px;
+      padding: 0;
+      overflow: hidden;
+      background: var(--sidebar-border);
+      color: transparent;
+    }
+    .nav-link {
+      justify-content: center;
+      padding: 0;
+      position: relative;
+      span:not(.nav-count) { display: none; }
+    }
+    .nav-count {
+      position: absolute;
+      top: 3px;
+      right: 5px;
+      min-width: 8px;
+      height: 8px;
+      padding: 0;
+      overflow: hidden;
+      color: transparent;
+      line-height: 8px;
+    }
+    .collapse { justify-content: center; width: 100%; margin: 0 0 var(--space-2); }
+    .theme { flex-direction: column; margin: 0 0 var(--space-2); }
+    .account { flex-direction: column; }
+    .user-chip { justify-content: center; padding: 4px 0; }
+  }
+}
+
 // Narrow screens: the sidebar becomes a bar across the top with the
 // navigation scrolling sideways.
 @media (max-width: 820px) {
@@ -249,7 +319,7 @@ nav {
   }
 
   .brand, .brand-row { margin: 0; }
-  .brand-name, .nav-group, .org label, .username, .search-button span, .search-button kbd { display: none; }
+  .brand-name, .nav-group, .org label, .username, .search-button span, .search-button kbd, .collapse { display: none; }
   .search-button { margin: 0; }
   .org { margin: 0; flex: 1; min-width: 120px; }
 

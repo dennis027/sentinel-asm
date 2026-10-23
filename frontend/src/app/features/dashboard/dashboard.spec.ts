@@ -29,6 +29,21 @@ describe('Dashboard', () => {
     el = fixture.nativeElement;
     fixture.detectChanges();
 
+    http.expectOne(`${ORG}/getting-started/`).flush({
+      done: 1, total: 2, complete: false,
+      steps: [
+        { key: 'verify', title: 'Prove you own the domain', detail: '', done: true, link: '/organization' },
+        { key: 'owners', title: 'Give hosts an owner', detail: 'New issues go to them.', done: false, link: '/assets' },
+      ],
+    });
+    http.expectOne(`${ORG}/emerging-threats/`).flush({
+      days: 90, catalogue_recent: 40, software_checked: 12,
+      items: [{
+        cve: 'CVE-2026-0001', name: 'Grafana path traversal', vendor: 'Grafana Labs', product: 'Grafana',
+        description: '', required_action: '', date_added: '2026-10-10', due_date: null, ransomware: true,
+        software: 'Grafana', confirmed: false, hosts: [{ id: 'a9', value: 'grafana.acme.com', version: '9.1.0', confirmed: false }],
+      }],
+    });
     http.expectOne((r) => r.url === `${ORG}/trend/`).flush({
       days: 90,
       points: [
@@ -85,6 +100,24 @@ describe('Dashboard', () => {
   });
 
   afterEach(() => http.verify());
+
+  it('shows the setup checklist, which can be hidden', () => {
+    const setup = el.querySelector('.setup');
+    expect(setup?.textContent).toContain('1 of 2 done');
+    expect(setup?.querySelector('li.done')?.textContent).toContain('Prove you own the domain');
+    expect(setup?.querySelector('a.step-title')?.getAttribute('href')).toBe('/assets');
+    (setup?.querySelector('.setup-head button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(el.querySelector('.setup')).toBeNull();
+  });
+
+  it('flags recently exploited vulnerabilities in software we run', () => {
+    const threats = el.querySelector('.threats')?.textContent ?? '';
+    expect(threats).toContain('CVE-2026-0001');
+    expect(threats).toContain('Used by ransomware');
+    expect(threats).toContain('grafana.acme.com');
+    expect(threats).toContain('Check your version');
+  });
 
   it('leads with the grade and what it means', () => {
     expect(el.querySelector('.grade')?.textContent?.trim()).toBe('C');

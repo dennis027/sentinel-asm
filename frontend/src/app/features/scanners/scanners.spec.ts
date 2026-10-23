@@ -2,7 +2,7 @@ import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { environment } from '../../../environments/environment';
 import { Organization, ScanProgress } from '../../core/models/models';
-import { ConfirmService } from '../../core/services/confirm.service';
+import { Preflight } from '../../core/models/models';
 import { ToastService } from '../../core/services/toast.service';
 import { OrganizationContextService } from '../../core/services/organization-context-service';
 import { makeOrganization, page, provideAppTesting } from '../../testing/test-helpers';
@@ -39,8 +39,29 @@ function run(overrides: Partial<ScanProgress> = {}): ScanProgress {
     running: 8,
     success: 1680,
     failed: 10,
+    skipped: 0,
     finished: false,
     ...overrides,
+  };
+}
+
+function preflight(scanners: string[]): Preflight {
+  return {
+    scans_allowed: true,
+    hosts: {
+      active: 41698, in_scope: 41698, excluded: 0, checked: 200, resolves: 197, missing: 3, private: 0, unknown: 0,
+      missing_hosts: ['old.acme.com'], private_hosts: [], checked_at: '',
+    },
+    scanners: scanners.map((name) => ({
+      name, label: name === 'nmap' ? 'Port scan' : 'Subdomain discovery', applies_to: name === 'nmap' ? 'asset' : 'organization',
+      targets: name === 'nmap' ? 41698 : 1, likely_skipped: name === 'nmap' ? 300 : 0, missing_tools: [], running: false,
+      typical_seconds: 4,
+    })),
+    jobs: 41699,
+    estimated_seconds: 40000,
+    worker_seen_at: '2026-10-22T10:00:00Z',
+    warnings: ['3 of the 200 host names checked no longer exist in DNS. Scanners that connect to hosts will skip them.'],
+    ready: true,
   };
 }
 
@@ -89,6 +110,21 @@ describe('Scanners', () => {
     http.verify();
   });
 
+  /** Answers the check before a scan; returns what the dialog said. */
+  function answerPreflight(go: boolean, scanners: string[]): string {
+    fixture.detectChanges();
+    const request = http.expectOne((r) => r.url === `${API}/organizations/org-1/preflight/`);
+    expect(request.request.params.get('scanners')).toBe(scanners.join(','));
+    request.flush(preflight(scanners));
+    fixture.detectChanges();
+    const dialog = el.querySelector('app-preflight-dialog') as HTMLElement;
+    const text = dialog.textContent ?? '';
+    const buttons = dialog.querySelectorAll<HTMLButtonElement>('.actions button');
+    buttons[go ? 1 : 0].click();
+    fixture.detectChanges();
+    return text;
+  }
+
   it('has no asset picker: each scanner says it covers the whole domain', async () => {
     await setUp(makeOrganization({ my_role: 'analyst' }));
     expect(el.querySelector('select, input')).toBeNull();
@@ -98,20 +134,19 @@ describe('Scanners', () => {
     expect(card('Port scan').querySelector('.scope')?.textContent).toContain('all 41,698 assets');
   });
 
-  it('starts an asset-level scanner on every asset after confirming the count', async () => {
+  it('starts an asset-level scanner on every asset after the check before the scan', async () => {
     await setUp(makeOrganization({ my_role: 'analyst' }));
-    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
 
     button('Port scan').click();
+    const check = answerPreflight(false, ['nmap']);
+    expect(check).toContain('41,698');
+    expect(check).toContain('3 of the 200 host names checked no longer exist');
+    expect(check).toContain('~300 skipped');
     await fixture.whenStable();
-    const question = ask.calls.mostRecent().args[0];
-    expect(question.title).toBe('Run Port scan on all 41,698 assets?');
-    expect(question.message).toContain('That is a lot of scans and can take a long time to finish.');
-    expect(question.confirmLabel).toBe('Run scan');
     http.expectNone(`${API}/scan-jobs/trigger/`);
 
-    ask.and.resolveTo(true);
     button('Port scan').click();
+    answerPreflight(true, ['nmap']);
     await fixture.whenStable();
     const trigger = http.expectOne(`${API}/scan-jobs/trigger/`);
     expect(trigger.request.body).toEqual({ scanner_name: 'nmap', organization_id: 'org-1' });
@@ -125,11 +160,10 @@ describe('Scanners', () => {
 
   it('starts the organization-level scanner without asking', async () => {
     await setUp(makeOrganization({ my_role: 'analyst' }));
-    const ask = spyOn(TestBed.inject(ConfirmService), 'ask');
 
     button('Subdomain discovery').click();
     await fixture.whenStable();
-    expect(ask).not.toHaveBeenCalled();
+    http.expectNone((r) => r.url.endsWith('/preflight/'));
     const trigger = http.expectOne(`${API}/scan-jobs/trigger/`);
     expect(trigger.request.body).toEqual({ scanner_name: 'subfinder', organization_id: 'org-1' });
     trigger.flush({ batch_id: 'batch-2', scanner_name: 'subfinder', target_count: 1 });
@@ -161,6 +195,7 @@ describe('Scanners', () => {
   it('shows the reason when the server refuses to start', async () => {
     await setUp(makeOrganization({ my_role: 'analyst' }), { assets: 1 });
     button('Port scan').click();
+    answerPreflight(true, ['nmap']);
     await fixture.whenStable();
     http
       .expectOne(`${API}/scan-jobs/trigger/`)
@@ -217,13 +252,12 @@ describe('Scanners', () => {
     expect(headings[1]).toContain('Network');
   });
 
-  it('runs every scanner after one confirmation', async () => {
+  it('runs every scanner after one check', async () => {
     await setUp(makeOrganization({ my_role: 'analyst' }));
-    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     const runAll = fixture.componentInstance.runAll();
     await fixture.whenStable();
-    expect(ask.calls.mostRecent().args[0].title).toBe('Run all 2 scanners on acme.com?');
-    expect(ask.calls.mostRecent().args[0].message[0]).toContain('41,699 individual checks');
+    expect(answerPreflight(true, ['subfinder', 'nmap'])).toContain('Start 2 scanners');
+    await fixture.whenStable();
 
     // Discovery first, as on the page; one refusal doesn't stop the rest.
     http.expectOne((r) => r.url === `${API}/scan-jobs/trigger/` && r.body.scanner_name === 'subfinder')

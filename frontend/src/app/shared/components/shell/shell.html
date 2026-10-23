@@ -1,5 +1,5 @@
 <div class="shell">
-  <aside class="sidebar">
+  <aside class="sidebar" [class.collapsed]="collapsed()">
     <div class="brand-row">
       <a routerLink="/dashboard" class="brand">
         <app-logo-mark class="brand-mark" [size]="32" />
@@ -32,82 +32,96 @@
 
     <nav aria-label="Main">
       <p class="nav-group">Overview</p>
-      <a routerLink="/dashboard" routerLinkActive="active" class="nav-link">
+      <a routerLink="/dashboard" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'Dashboard' : null">
         <app-icon name="dashboard" />
         <span>Dashboard</span>
       </a>
-      <a routerLink="/fix-plan" routerLinkActive="active" class="nav-link">
+      <a routerLink="/fix-plan" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'Fix plan' : null">
         <app-icon name="wrench" />
         <span>Fix plan</span>
       </a>
-      <a routerLink="/my-work" routerLinkActive="active" class="nav-link">
+      <a routerLink="/my-work" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'My work' : null">
         <app-icon name="inbox" />
         <span>My work</span>
         @if (myWorkCount()) {
           <span class="nav-count" [attr.aria-label]="myWorkCount() + ' open issues assigned to you'">{{ myWorkCount() }}</span>
         }
       </a>
-      <a routerLink="/findings" routerLinkActive="active" class="nav-link">
+      <a routerLink="/findings" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'Findings' : null">
         <app-icon name="findings" />
         <span>Findings</span>
       </a>
 
       <p class="nav-group">Attack surface</p>
-      <a routerLink="/surface-map" routerLinkActive="active" class="nav-link">
+      <a routerLink="/surface-map" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'Map' : null">
         <app-icon name="map" />
         <span>Map</span>
       </a>
-      <a routerLink="/assets" routerLinkActive="active" class="nav-link">
+      <a routerLink="/assets" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'Assets' : null">
         <app-icon name="assets" />
         <span>Assets</span>
       </a>
-      <a routerLink="/inventory" routerLinkActive="active" class="nav-link">
+      <a routerLink="/inventory" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'Inventory' : null">
         <app-icon name="package" />
         <span>Inventory</span>
       </a>
-      <a routerLink="/screenshots" routerLinkActive="active" class="nav-link">
+      <a routerLink="/changes" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'Changes' : null">
+        <app-icon name="repeat" />
+        <span>Changes</span>
+      </a>
+      <a routerLink="/screenshots" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'Screenshots' : null">
         <app-icon name="camera" />
         <span>Screenshots</span>
       </a>
 
       <p class="nav-group">Monitoring</p>
-      <a routerLink="/logs" routerLinkActive="active" class="nav-link">
+      <a routerLink="/logs" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'Logs' : null">
         <app-icon name="server" />
         <span>Logs</span>
       </a>
 
       <p class="nav-group">Scanning</p>
-      <a routerLink="/scanners" routerLinkActive="active" class="nav-link">
+      <a routerLink="/scanners" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'Scanners' : null">
         <app-icon name="scanners" />
         <span>Scanners</span>
       </a>
-      <a routerLink="/scan-history" routerLinkActive="active" class="nav-link">
+      <a routerLink="/scan-history" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'Scan history' : null">
         <app-icon name="history" />
         <span>Scan history</span>
       </a>
 
       <p class="nav-group">Governance</p>
-      <a routerLink="/compliance" routerLinkActive="active" class="nav-link">
+      <a routerLink="/policies" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'Policies' : null">
+        <app-icon name="shield" />
+        <span>Policies</span>
+      </a>
+      <a routerLink="/compliance" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'Compliance' : null">
         <app-icon name="shield-check" />
         <span>Compliance</span>
       </a>
-      <a routerLink="/activity" routerLinkActive="active" class="nav-link">
+      <a routerLink="/activity" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'Activity' : null">
         <app-icon name="activity" />
         <span>Activity</span>
       </a>
 
       <p class="nav-group">Settings</p>
-      <a routerLink="/notification-rules" routerLinkActive="active" class="nav-link">
+      <a routerLink="/notification-rules" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'Alerts & reports' : null">
         <app-icon name="bell" />
         <span>Alerts &amp; reports</span>
       </a>
-      <a routerLink="/organization" routerLinkActive="active" class="nav-link">
+      <a routerLink="/organization" routerLinkActive="active" class="nav-link" [attr.title]="collapsed() ? 'Organization' : null">
         <app-icon name="users" />
         <span>Organization</span>
       </a>
     </nav>
 
     <div class="footer">
+      <button class="collapse" type="button" (click)="toggleCollapsed()"
+        [attr.aria-label]="collapsed() ? 'Expand the sidebar' : 'Collapse the sidebar'"
+        [title]="collapsed() ? 'Expand the sidebar' : 'Collapse the sidebar'">
+        <app-icon [name]="collapsed() ? 'chevron-right' : 'chevron-left'" [size]="15" />
+        <span>Collapse</span>
+      </button>
       <div class="theme" role="group" aria-label="Colour theme">
         @for (option of themeOptions; track option.value) {
           <button

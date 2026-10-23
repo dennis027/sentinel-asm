@@ -14,6 +14,22 @@ export const routes: Routes = [
     canMatch: [() => !inject(AuthService).isAuthenticated()],
     loadComponent: () => import('./features/home/home').then((m) => m.Home),
   },
+  // Signed-out pages: account recovery and invitation links.
+  {
+    path: 'forgot-password',
+    title: 'Reset your password · Densight',
+    loadComponent: () => import('./features/forgot-password/forgot-password').then((m) => m.ForgotPassword),
+  },
+  {
+    path: 'reset-password/:uid/:token',
+    title: 'Choose a new password · Densight',
+    loadComponent: () => import('./features/reset-password/reset-password').then((m) => m.ResetPassword),
+  },
+  {
+    path: 'invite/:token',
+    title: 'Invitation · Densight',
+    loadComponent: () => import('./features/invite/invite').then((m) => m.Invite),
+  },
   {
     path: 'login',
     title: 'Sign in · Densight',
@@ -81,6 +97,16 @@ export const routes: Routes = [
         path: 'surface-map',
         title: 'Attack surface · Densight',
         loadComponent: () => import('./features/surface-map/surface-map').then((m) => m.SurfaceMapPage),
+      },
+      {
+        path: 'changes',
+        title: 'Changes · Densight',
+        loadComponent: () => import('./features/changes/changes').then((m) => m.Changes),
+      },
+      {
+        path: 'policies',
+        title: 'Policies · Densight',
+        loadComponent: () => import('./features/policies/policies').then((m) => m.Policies),
       },
       {
         path: 'compliance',

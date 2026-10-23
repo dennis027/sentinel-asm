@@ -13,7 +13,7 @@ function run(overrides: Partial<ScanRun> = {}): ScanRun {
   return {
     run_id: 'r1', trigger: 'schedule', trigger_label: 'Daily schedule', triggered_by: null, scanner_name: null,
     scanner_label: null, host: null, scanners: 25, hosts: 46, organization_level: true, jobs: 1150, succeeded: 1140,
-    failed: 10, unfinished: 0, new_findings: 3, started: '2026-10-16T02:00:00Z', finished: '2026-10-16T02:14:00Z',
+    failed: 10, skipped: 0, unfinished: 0, new_findings: 3, started: '2026-10-16T02:00:00Z', finished: '2026-10-16T02:14:00Z',
     ...overrides,
   };
 }
@@ -84,9 +84,16 @@ describe('ScanHistory', () => {
     const jobs = http.expectOne((r) => r.url === `${API}/scan-jobs/`);
     expect(jobs.request.params.get('run_id')).toBe('r3');
     jobs.flush(page([JOB]));
+    http.expectOne((r) => r.url === `${API}/scan-jobs/reasons/` && r.params.get('run_id') === 'r3').flush([
+      { status: 'skipped', reason: "the host doesn't resolve in DNS", count: 7, scanners: ['Port scan'], hosts: ['old.acme.com'] },
+    ]);
     fixture.detectChanges();
     expect(el.querySelector('.run-jobs')?.textContent).toContain('Port scan');
     expect(el.querySelector('.run-jobs')?.textContent).toContain('shop.acme.com');
+    const reasons = el.querySelector('.reasons')?.textContent ?? '';
+    expect(reasons).toContain('7×');
+    expect(reasons).toContain("the host doesn't resolve in DNS");
+    expect(reasons).toContain('Skipped');
   });
 
   it('can still show every scan, with where each came from', () => {

@@ -1,0 +1,60 @@
+<div class="page">
+  <div class="header">
+    <div>
+      <h1>Changes</h1>
+      <p class="muted">What appeared on and disappeared from {{ orgContext.selectedOrganization()?.root_domain }}'s attack surface.</p>
+    </div>
+    <div class="toggle" role="group" aria-label="Period">
+      @for (p of periods; track p) {
+        <button [class.active]="days() === p" (click)="setDays(p)">{{ p }} days</button>
+      }
+    </div>
+  </div>
+
+  @if (data(); as d) {
+    <div class="kinds" role="group" aria-label="Kind of change">
+      @for (k of kinds(); track k.kind) {
+        <button class="kind" [class.active]="kind() === k.kind" [class.exposing]="k.exposing" [class.zero]="!k.count"
+          (click)="setKind(k.kind)" [attr.aria-pressed]="kind() === k.kind">
+          <span class="kind-icon"><app-icon [name]="k.icon" [size]="15" /></span>
+          <strong>{{ k.count | number }}</strong>
+          <span>{{ k.label }}</span>
+        </button>
+      }
+    </div>
+  }
+
+  @if (isLoading()) {
+    <p class="loading">Loading…</p>
+  } @else if (failed()) {
+    <p class="error">Could not load the changes.</p>
+  } @else if (!dayGroups().length) {
+    <app-empty-state art="radar" title="Nothing changed">
+      @if (kind()) {
+        No changes of this kind in the last {{ days() }} days.
+      } @else {
+        The attack surface looked the same for the last {{ days() }} days. Scans run daily; changes show up here.
+      }
+    </app-empty-state>
+  } @else {
+    @for (group of dayGroups(); track group.day) {
+      <section class="day">
+        <h2>{{ group.day | date: 'EEEE, MMM d' }}</h2>
+        <ul class="panel events">
+          @for (e of group.events; track $index) {
+            <li>
+              <span class="event-icon kind-{{ e.kind }}" [class.exposing]="isExposing(e.kind)"><app-icon [name]="iconFor(e.kind)" [size]="14" /></span>
+              <span class="event-label">{{ e.label }}</span>
+              <span class="event-detail">{{ e.detail }}</span>
+              <a class="event-host" [routerLink]="['/assets', e.asset]">{{ e.asset_value }}</a>
+              <time class="muted">{{ e.at | date: 'HH:mm' }}</time>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+    @if (data()!.total > data()!.events.length) {
+      <p class="muted more">Showing the latest {{ data()!.events.length | number }} of {{ data()!.total | number }} changes. Pick one kind above to see more of it.</p>
+    }
+  }
+</div>

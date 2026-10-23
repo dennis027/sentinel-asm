@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { Observable, finalize, shareReplay, tap } from 'rxjs';
+import { Observable, catchError, finalize, map, of, shareReplay, switchMap, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 interface TokenPair {
@@ -43,10 +43,25 @@ export class AuthService {
     return this.http
       .post<TokenPair>(`${environment.apiBaseUrl}/auth/login/`, { username, password, ...(otp ? { otp } : {}) })
       .pipe(
-        tap((tokens) => {
-          this.setSession(tokens.access, tokens.refresh, username);
-        }),
+        tap((tokens) => this.setSession(tokens.access, tokens.refresh, username)),
+        // Signed in with an email address: remember the account's real username.
+        switchMap((tokens) => this.loadUsername().pipe(map(() => tokens))),
       );
+  }
+
+  /** Starts a session from tokens issued elsewhere (an invitation that created the account). */
+  startSession(access: string, refresh: string, username: string): void {
+    this.setSession(access, refresh, username);
+  }
+
+  private loadUsername(): Observable<unknown> {
+    return this.http.get<{ username: string }>(`${environment.apiBaseUrl}/auth/me/`).pipe(
+      tap((me) => {
+        this.username.set(me.username);
+        localStorage.setItem(USERNAME_KEY, me.username);
+      }),
+      catchError(() => of(null)),
+    );
   }
 
   logout(): void {

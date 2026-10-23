@@ -7,6 +7,10 @@
         would map it. The closer and larger a host, the more open issues it has.
       </p>
     </div>
+    <div class="toggle" role="group" aria-label="Arrange hosts">
+      <button [class.active]="arrangement() === 'risk'" (click)="arrangement.set('risk')">By risk</button>
+      <button [class.active]="arrangement() === 'hosting'" (click)="arrangement.set('hosting')">By hosting</button>
+    </div>
   </div>
 
   @if (isLoading()) {
@@ -22,13 +26,23 @@
 
     <div class="panel map-panel">
       <div class="map">
-        <svg [attr.viewBox]="'0 0 ' + size + ' ' + size" role="img" [attr.aria-label]="'Map of ' + m.total_assets + ' hosts under ' + m.root_domain">
-          <circle class="ring" [attr.cx]="center" [attr.cy]="center" r="130" />
-          <circle class="ring" [attr.cx]="center" [attr.cy]="center" r="205" />
-          <circle class="ring" [attr.cx]="center" [attr.cy]="center" r="265" />
+        <svg [attr.viewBox]="'-60 -20 ' + (size + 120) + ' ' + (size + 40)" role="img" [attr.aria-label]="'Map of ' + m.total_assets + ' hosts under ' + m.root_domain">
+          @if (arrangement() === 'risk') {
+            <circle class="ring" [attr.cx]="center" [attr.cy]="center" r="130" />
+            <circle class="ring" [attr.cx]="center" [attr.cy]="center" r="205" />
+            <circle class="ring" [attr.cx]="center" [attr.cy]="center" r="265" />
+          } @else {
+            <circle class="ring" [attr.cx]="center" [attr.cy]="center" r="290" />
+            @for (s of sectors(); track s.provider) {
+              <line class="sector" [attr.x1]="center" [attr.y1]="center" [attr.x2]="s.x1" [attr.y2]="s.y1" />
+              <text class="sector-label" [attr.x]="s.x" [attr.y]="s.y" [attr.text-anchor]="s.anchor" dominant-baseline="middle">
+                {{ s.provider }} <tspan class="sector-count">{{ s.count }}</tspan>
+              </text>
+            }
+          }
 
           @for (node of nodes(); track node.id) {
-            @if (!node.clean) {
+            @if (!node.clean && !isHidden(node)) {
               <line class="link" [attr.x1]="center" [attr.y1]="center" [attr.x2]="node.x" [attr.y2]="node.y" />
             }
           }
@@ -39,12 +53,13 @@
           @for (node of nodes(); track node.id) {
             <circle
               class="node {{ node.tone }}"
-              [class.active]="hovered()?.id === node.id"
+              [class.active]="hovered()?.id === node.id || peeking()?.id === node.id"
+              [class.dimmed]="isHidden(node)"
               [attr.cx]="node.x"
               [attr.cy]="node.y"
               [attr.r]="node.r"
-              tabindex="0"
-              role="link"
+              [attr.tabindex]="isHidden(node) ? -1 : 0"
+              role="button"
               [attr.aria-label]="node.value + ', grade ' + node.risk_grade + ', ' + node.open_findings + ' open issues'"
               (mouseenter)="hovered.set(node)"
               (mouseleave)="hovered.set(null)"
@@ -57,7 +72,7 @@
         </svg>
 
         @if (hovered(); as node) {
-          <div class="tooltip" [style.left.%]="(node.x / size) * 100" [style.top.%]="(node.y / size) * 100">
+          <div class="tooltip" [style.left.%]="((node.x + 60) / (size + 120)) * 100" [style.top.%]="((node.y + 20) / (size + 40)) * 100">
             <strong>{{ node.value }}</strong>
             @if (node.clean) {
               <span>No open issues</span>
@@ -67,17 +82,37 @@
                 <span>{{ node.critical_high }} critical or high</span>
               }
             }
-            <span class="hint">Click to see its findings</span>
+            @if (node.provider) { <span>{{ node.provider }}</span> }
+            <span class="hint">Click for details</span>
           </div>
         }
       </div>
 
-      <ul class="legend">
-        @for (item of legend; track item.tone) {
-          <li><span class="swatch {{ item.tone }}"></span>{{ item.label }}</li>
-        }
-        <li><span class="swatch size"></span>Bigger = more open issues</li>
-      </ul>
+      <div class="side">
+        <p class="legend-title">Show</p>
+        <ul class="legend">
+          @for (item of legend; track item.tone) {
+            <li>
+              <button type="button" [class.off]="hiddenTones().has(item.tone)" [attr.aria-pressed]="!hiddenTones().has(item.tone)" (click)="toggleTone(item.tone)">
+                <span class="swatch {{ item.tone }}"></span>
+                <span class="legend-label">{{ item.label }}</span>
+                <span class="legend-count">{{ toneCounts()[item.tone] ?? 0 }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+        <p class="legend-note"><span class="swatch size"></span>Bigger = more open issues</p>
+      </div>
     </div>
+  }
+
+  @if (peeking(); as asset) {
+    <app-asset-peek
+      [asset]="asset"
+      [members]="members()"
+      [canEdit]="orgContext.canTriggerScans()"
+      (closed)="peeking.set(null)"
+      (changed)="peeking.set($event)"
+    />
   }
 </div>

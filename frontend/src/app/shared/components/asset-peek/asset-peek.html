@@ -1,0 +1,102 @@
+<!-- Clicking the dimmed page closes the panel; Escape does too. -->
+<!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->
+<div class="scrim" (click)="closed.emit()"></div>
+<aside class="peek" role="dialog" aria-modal="true" [attr.aria-label]="asset().value">
+  @let a = asset();
+  @let status = webStatus(a.web);
+  <header>
+    <span class="grade badge grade-{{ a.risk_grade }}" title="Risk grade">{{ a.risk_grade }}</span>
+    <div class="title">
+      <h2>{{ a.value }}</h2>
+      <p>{{ a.web.title || 'No page title recorded' }}</p>
+    </div>
+    <button class="close" type="button" aria-label="Close" (click)="closed.emit()"><app-icon name="x" [size]="16" /></button>
+  </header>
+
+  <dl class="facts">
+    <div>
+      <dt>Web</dt>
+      <dd><span class="web-status tone-{{ status.tone }}" [title]="status.hint">{{ status.text }}</span>
+        @if (a.web.response_ms !== undefined) { <span class="muted">{{ a.web.response_ms }} ms</span> }</dd>
+    </div>
+    <div>
+      <dt>Hosted on</dt>
+      <dd>{{ a.hosting.provider || (a.hosting.checked_at ? 'Not identified' : 'Not checked yet') }}</dd>
+    </div>
+    <div>
+      <dt>Importance</dt>
+      <dd>{{ criticalityLabel(a.criticality) }}</dd>
+    </div>
+    <div>
+      <dt>First seen</dt>
+      <dd>{{ a.first_seen | date: 'MMM d, y' }}</dd>
+    </div>
+  </dl>
+
+  @if (a.web.final_url && a.web.final_url !== 'https://' + a.value + '/') {
+    <p class="redirect"><app-icon name="share" [size]="13" /> Goes to <span>{{ a.web.final_url }}</span></p>
+  }
+
+  <section>
+    <h3>Owner</h3>
+    @if (canEdit()) {
+      <select aria-label="Owner" [ngModel]="a.owner ?? ''" (ngModelChange)="setOwner($event)">
+        <option value="">Nobody</option>
+        @for (m of members(); track m.user_id) {
+          <option [value]="m.user_id">{{ m.username }}</option>
+        }
+      </select>
+      <p class="hint">New issues found on this host are assigned to its owner.</p>
+    } @else {
+      <p>{{ a.owner_name || 'Nobody' }}</p>
+    }
+  </section>
+
+  @if (a.hosting.ips?.length) {
+    <section>
+      <h3>Addresses</h3>
+      <p class="mono">{{ a.hosting.ips!.join(', ') }}</p>
+      @if (a.hosting.cnames?.length) {
+        <p class="mono muted">via {{ a.hosting.cnames!.join(' → ') }}</p>
+      }
+    </section>
+  }
+
+  <section>
+    <h3>Software</h3>
+    @if (a.technologies.length) {
+      <ul class="chips">
+        @for (t of a.technologies; track t.id) {
+          <li>{{ t.name }}@if (t.version) { <span>{{ t.version }}</span> }</li>
+        }
+      </ul>
+    } @else {
+      <p class="muted">None detected yet.</p>
+    }
+  </section>
+
+  <section>
+    <h3>Open issues @if (issueCount()) { <span class="count">{{ issueCount() }}</span> }</h3>
+    @if (loadingIssues()) {
+      <p class="muted">Loading…</p>
+    } @else if (issues().length) {
+      <ul class="issues">
+        @for (f of issues(); track f.id) {
+          <li>
+            <span class="badge severity-{{ f.severity }}">{{ f.severity }}</span>
+            <a [routerLink]="['/findings', f.id]">{{ f.title }}</a>
+          </li>
+        }
+      </ul>
+    } @else {
+      <p class="clean"><app-icon name="check" [size]="14" /> Nothing open on this host.</p>
+    }
+  </section>
+
+  <footer>
+    <a class="btn" [routerLink]="['/assets', a.id]">Open full page</a>
+    @if (a.web.final_url) {
+      <a class="btn secondary" [href]="a.web.final_url" target="_blank" rel="noopener noreferrer">Visit site</a>
+    }
+  </footer>
+</aside>

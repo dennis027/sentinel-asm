@@ -2,7 +2,7 @@ import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { environment } from '../../../environments/environment';
 import { OrganizationContextService } from '../../core/services/organization-context-service';
-import { makeOrganization, page, provideAppTesting } from '../../testing/test-helpers';
+import { makeAsset, makeOrganization, page, provideAppTesting } from '../../testing/test-helpers';
 
 import { Assets } from './assets';
 
@@ -29,7 +29,11 @@ describe('Assets', () => {
     fixture.detectChanges();
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    // The team (for owners) and saved views load alongside the list.
+    http.match((r) => r.url.endsWith('/members/') || r.url.endsWith('/saved-views/')).forEach((r) => r.flush([]));
+    http.verify();
+  });
 
   it('lists only the selected organization\'s assets', () => {
     const request = http.expectOne((r) => r.url === `${API}/assets/`);
@@ -69,5 +73,34 @@ describe('Assets', () => {
     http.expectOne((r) => r.method === 'POST' && r.url === `${API}/assets/`).flush({ id: 'a9', value: 'vpn.acme.com' });
     http.expectOne((r) => r.method === 'GET' && r.url === `${API}/assets/`).flush(page([]));
     expect(component.isAdding()).toBeFalse();
+  });
+
+  it('searches with the query language and opens a host in the side panel', async () => {
+    http.expectOne((r) => r.url === `${API}/assets/`).flush(page([
+      makeAsset({ id: 'a1', value: 'shop.acme.com', web: { status: 301, final_url: 'https://www.acme.com/' },
+        hosting: { provider: 'AWS', ips: ['198.51.100.1'], checked_at: 'x' }, owner_name: 'brian' }),
+    ]));
+    fixture.detectChanges();
+    const root: HTMLElement = fixture.nativeElement;
+    const row = root.querySelector('tbody tr') as HTMLElement;
+    expect(row.textContent).toContain('301 →');
+    expect(row.textContent).toContain('AWS');
+    expect(row.textContent).toContain('brian');
+
+    const search = root.querySelector('.search input') as HTMLInputElement;
+    search.value = 'provider:aws tech:nginx';
+    search.dispatchEvent(new Event('input'));
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    const searched = http.expectOne((r) => r.url === `${API}/assets/`);
+    expect(searched.request.params.get('q')).toBe('provider:aws tech:nginx');
+    searched.flush(page([makeAsset({ id: 'a1', value: 'shop.acme.com' })]));
+    fixture.detectChanges();
+
+    (root.querySelector('tbody tr td:nth-child(2)') as HTMLElement).click();
+    fixture.detectChanges();
+    http.expectOne((r) => r.url === `${API}/findings/` && r.params.get('asset') === 'a1').flush(page([]));
+    fixture.detectChanges();
+    expect(root.querySelector('app-asset-peek h2')?.textContent).toContain('shop.acme.com');
+    expect(root.querySelector('app-asset-peek')?.textContent).toContain('Nothing open on this host');
   });
 });

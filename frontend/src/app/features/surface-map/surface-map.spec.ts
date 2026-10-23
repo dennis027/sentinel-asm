@@ -1,9 +1,8 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
 import { environment } from '../../../environments/environment';
 import { OrganizationContextService } from '../../core/services/organization-context-service';
-import { makeOrganization, page, provideAppTesting } from '../../testing/test-helpers';
+import { makeAsset, makeOrganization, page, provideAppTesting } from '../../testing/test-helpers';
 
 import { SurfaceMapPage } from './surface-map';
 
@@ -21,15 +20,16 @@ describe('SurfaceMapPage', () => {
     fixture = TestBed.createComponent(SurfaceMapPage);
     el = fixture.nativeElement;
     fixture.detectChanges();
+    http.expectOne(`${API}/organizations/org-1/members/`).flush([]);
     http.expectOne(`${API}/organizations/org-1/surface-map/`).flush({
       root_domain: 'acme.com',
       total_assets: 120,
       assets_at_risk: 2,
       hidden: 117,
       nodes: [
-        { id: 'a1', value: 'db.acme.com', risk_score: 20, risk_grade: 'F', open_findings: 6, critical_high: 3, clean: false },
-        { id: 'a2', value: 'www.acme.com', risk_score: 80, risk_grade: 'B', open_findings: 1, critical_high: 0, clean: false },
-        { id: 'a3', value: 'cdn.acme.com', risk_score: 100, risk_grade: 'A+', open_findings: 0, critical_high: 0, clean: true },
+        { id: 'a1', value: 'db.acme.com', risk_score: 20, risk_grade: 'F', open_findings: 6, critical_high: 3, clean: false, provider: '' },
+        { id: 'a2', value: 'www.acme.com', risk_score: 80, risk_grade: 'B', open_findings: 1, critical_high: 0, clean: false, provider: 'AWS' },
+        { id: 'a3', value: 'cdn.acme.com', risk_score: 100, risk_grade: 'A+', open_findings: 0, critical_high: 0, clean: true, provider: 'Cloudflare' },
       ],
     });
     fixture.detectChanges();
@@ -46,10 +46,26 @@ describe('SurfaceMapPage', () => {
     expect(el.querySelectorAll('.legend li').length).toBe(5);
   });
 
-  it('opens a host\'s findings when it is clicked', () => {
-    const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+  it('opens a summary of a host when it is clicked', () => {
+    const http = TestBed.inject(HttpTestingController);
     (el.querySelector('circle.node') as SVGElement).dispatchEvent(new MouseEvent('click'));
-    expect(navigate).toHaveBeenCalledWith(['/findings'], { queryParams: { asset: 'a1', assetName: 'db.acme.com' } });
+    http.expectOne(`${API}/assets/a1/`).flush(makeAsset({ id: 'a1', value: 'db.acme.com' }));
+    fixture.detectChanges();
+    http.expectOne((r) => r.url === `${API}/findings/`).flush(page([]));
+    fixture.detectChanges();
+    expect(el.querySelector('app-asset-peek h2')?.textContent).toContain('db.acme.com');
+  });
+
+  it('hides a grade from the legend and arranges hosts by hosting', () => {
+    (el.querySelector('.legend button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(el.querySelector('circle.node.bad')?.classList).toContain('dimmed');
+    const byHosting = Array.from(el.querySelectorAll('.toggle button')).find((b) => b.textContent?.includes('By hosting')) as HTMLButtonElement;
+    byHosting.click();
+    fixture.detectChanges();
+    const labels = Array.from(el.querySelectorAll('.sector-label')).map((t) => t.textContent?.trim());
+    expect(labels.length).toBe(3);
+    expect(labels.join(' ')).toContain('AWS');
   });
 
   it('explains a host on hover', () => {

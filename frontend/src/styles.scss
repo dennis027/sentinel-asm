@@ -533,3 +533,18 @@ tbody tr:hover td { background: var(--color-row-hover); }
     &:hover { color: var(--color-text-primary); }
   }
 }
+
+// The last web response of a host (200, 301 →, 404, No reply).
+.web-status {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  &.tone-ok { background: var(--color-success-bg); color: var(--color-success); }
+  &.tone-redirect { background: var(--color-info-bg); color: var(--color-info); }
+  &.tone-client { background: var(--color-warning-bg); color: var(--color-warning); }
+  &.tone-server { background: var(--color-danger-bg); color: var(--color-danger); }
+  &.tone-none { background: var(--color-surface-alt); color: var(--color-text-muted); }
+}

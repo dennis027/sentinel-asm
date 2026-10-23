@@ -70,7 +70,7 @@
             (ngModelChange)="code.set($event)"
           />
         } @else {
-          <label for="username">Username</label>
+          <label for="username">Username or email</label>
           <input
             id="username"
             type="text"
@@ -80,7 +80,10 @@
             (ngModelChange)="username.set($event)"
           />
 
-          <label for="password">Password</label>
+          <div class="password-label">
+            <label for="password">Password</label>
+            <a routerLink="/forgot-password">Forgot your password?</a>
+          </div>
           <input
             id="password"
             type="password"

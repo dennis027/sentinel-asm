@@ -1,7 +1,7 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { environment } from '../../../environments/environment';
-import { Member, Organization } from '../../core/models/models';
+import { Invitation, Member, Organization } from '../../core/models/models';
 import { OrganizationContextService } from '../../core/services/organization-context-service';
 import { ConfirmService } from '../../core/services/confirm.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -10,6 +10,13 @@ import { makeOrganization, page, provideAppTesting } from '../../testing/test-he
 import { OrganizationPage } from './organization';
 
 const ORGS = `${environment.apiBaseUrl}/organizations`;
+
+function invitation(overrides: Partial<Invitation> = {}): Invitation {
+  return {
+    id: 'inv-1', email: 'sam@example.com', role: 'analyst', role_label: 'Security Analyst', status: 'pending',
+    invited_by: 'erin', created_at: '2026-10-22T10:00:00Z', expires_at: '2026-10-29T10:00:00Z', ...overrides,
+  };
+}
 
 function member(username: string, role: Member['role']): Member {
   return { id: `m-${username}`, user_id: username.length, username, email: '', role, created_at: '2026-01-01T00:00:00Z' };
@@ -21,7 +28,7 @@ describe('OrganizationPage', () => {
   let el: HTMLElement;
   let context: OrganizationContextService;
 
-  async function setUp(orgs: Organization[], members: Member[] = []): Promise<void> {
+  async function setUp(orgs: Organization[], members: Member[] = [], invitations: Invitation[] = []): Promise<void> {
     localStorage.clear();
     localStorage.setItem('sentinel_username', 'erin');
     await TestBed.configureTestingModule({
@@ -39,6 +46,10 @@ describe('OrganizationPage', () => {
     fixture.detectChanges();
     if (orgs.length > 0) {
       http.expectOne(`${ORGS}/${orgs[0].id}/members/`).flush(members);
+      // Admins and owners also see who is still invited.
+      if (orgs[0].my_role === 'owner' || orgs[0].my_role === 'admin') {
+        http.expectOne(`${ORGS}/${orgs[0].id}/invitations/`).flush(invitations);
+      }
       fixture.detectChanges();
     }
   }
@@ -65,6 +76,7 @@ describe('OrganizationPage', () => {
     request.flush(makeOrganization({ id: 'new', domain_verified: false, scans_allowed: false }));
     fixture.detectChanges();
     http.expectOne(`${ORGS}/new/members/`).flush([member('erin', 'owner')]);
+    http.expectOne(`${ORGS}/new/invitations/`).flush([]);
     fixture.detectChanges();
 
     expect(context.selectedOrganization()?.id).toBe('new');
@@ -98,19 +110,45 @@ describe('OrganizationPage', () => {
     expect(el.querySelector('.steps')).toBeNull();
   });
 
-  it('lets an admin add a member and reports who was added', async () => {
+  it('invites by email, shows the link once, and lists the invitation', async () => {
     await setUp([makeOrganization({ my_role: 'admin' })], [member('erin', 'admin')]);
-    fixture.componentInstance.newMemberIdentifier.set('sam@example.com');
-    fixture.componentInstance.newMemberRole.set('analyst');
-    fixture.componentInstance.addMember();
+    fixture.componentInstance.inviteEmail.set('sam@example.com');
+    fixture.componentInstance.inviteRole.set('analyst');
+    fixture.componentInstance.invite();
 
-    const request = http.expectOne(`${ORGS}/org-1/members/`);
-    expect(request.request.body).toEqual({ identifier: 'sam@example.com', role: 'analyst' });
-    request.flush(member('sam', 'analyst'));
+    const request = http.expectOne(`${ORGS}/org-1/invitations/`);
+    expect(request.request.body).toEqual({ email: 'sam@example.com', role: 'analyst' });
+    request.flush(invitation({ invite_link: 'https://app/invite/tok123', email_sent: false }));
     fixture.detectChanges();
 
-    expect(fixture.componentInstance.members().map((m) => m.username)).toEqual(['erin', 'sam']);
-    expect(messages()).toEqual(['sam added as Analyst.']);
+    expect(el.querySelector('.invites')?.textContent).toContain('sam@example.com');
+    expect(el.querySelector('.invite-link code')?.textContent).toBe('https://app/invite/tok123');
+    expect(el.querySelector('.invite-link')?.textContent).toContain("Email isn't set up");
+    expect(messages()[0]).toContain('copy the link');
+  });
+
+  it('resends an invitation with a new link and cancels one after asking', async () => {
+    await setUp([makeOrganization({ my_role: 'owner' })], [member('erin', 'owner')], [invitation()]);
+    const page_ = fixture.componentInstance;
+    page_.resendInvitation(page_.invitations()[0]);
+    http.expectOne(`${ORGS}/org-1/invitations/inv-1/resend/`)
+      .flush(invitation({ invite_link: 'https://app/invite/new', email_sent: true }));
+    fixture.detectChanges();
+    expect(el.querySelector('.invite-link')?.textContent).toContain('Emailed to');
+    expect(messages()[0]).toContain('old link no longer works');
+
+    const confirm = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+    await page_.cancelInvitation(page_.invitations()[0]);
+    expect(confirm).toHaveBeenCalled();
+    http.expectOne(`${ORGS}/org-1/invitations/inv-1/`).flush(null);
+    fixture.detectChanges();
+    expect(page_.invitations()).toEqual([]);
+    expect(el.querySelector('.invite-link')).toBeNull();
+  });
+
+  it('does not show invitations to analysts', async () => {
+    await setUp([makeOrganization({ my_role: 'analyst' })], [member('erin', 'analyst')]);
+    expect(el.querySelector('form.add-member')).toBeNull();
   });
 
   it('does not offer the owner role to an admin, or let them edit an owner', async () => {
@@ -188,6 +226,7 @@ describe('OrganizationPage', () => {
 
     // On to the next organization, with the confirmation box cleared.
     http.expectOne(`${ORGS}/org-2/members/`).flush([]);
+    http.expectOne(`${ORGS}/org-2/invitations/`).flush([]);
     expect(context.allOrganizations().map((o) => o.id)).toEqual(['org-2']);
     expect(context.selectedOrganization()?.id).toBe('org-2');
     expect(fixture.componentInstance.deleteConfirmation()).toBe('');

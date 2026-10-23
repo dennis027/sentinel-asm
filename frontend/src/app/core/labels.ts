@@ -1,4 +1,4 @@
-import { Criticality, FindingStatus, FindingType, OrgRole } from './models/models';
+import { AssetWeb, Criticality, FindingStatus, FindingType, OrgRole } from './models/models';
 
 // Plain-language names for values the API sends as identifiers.
 
@@ -30,6 +30,7 @@ const FINDING_TYPE_LABELS: Record<FindingType, string> = {
   exposed_secret: 'Secret in public code',
   public_bucket: 'Public cloud storage',
   domain_registration: 'Domain registration',
+  policy_violation: 'Breaks a policy',
 };
 
 export function findingTypeLabel(type: string): string {
@@ -89,4 +90,17 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
     if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
   }
   return fallback;
+}
+
+/** The last web response as a short label and a tone for its pill. */
+export function webStatus(web: AssetWeb | undefined): { text: string; tone: 'ok' | 'redirect' | 'client' | 'server' | 'none'; hint: string } {
+  const status = web?.status;
+  if (!status) {
+    return { text: 'No reply', tone: 'none', hint: 'No web response recorded yet, or the site did not answer on HTTPS.' };
+  }
+  const hint = [web.title, web.response_ms !== undefined ? `${web.response_ms} ms` : ''].filter(Boolean).join(' · ');
+  if (status < 300) return { text: String(status), tone: 'ok', hint };
+  if (status < 400) return { text: `${status} →`, tone: 'redirect', hint: web.final_url ? `Goes to ${web.final_url}` : hint };
+  if (status < 500) return { text: String(status), tone: 'client', hint };
+  return { text: String(status), tone: 'server', hint };
 }

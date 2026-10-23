@@ -1,28 +1,44 @@
 import { PluralPipe } from '../../shared/pipes/plural';
 import { Component, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { Asset, AssetType, Criticality } from '../../core/models/models';
+import { Asset, AssetType, Criticality, Member } from '../../core/models/models';
 import { AssetService } from '../../core/services/asset-service';
+import { OrganizationService } from '../../core/services/organization-service';
 import { OrganizationContextService } from '../../core/services/organization-context-service';
 import { ToastService } from '../../core/services/toast.service';
-import { CRITICALITIES, apiErrorMessage, criticalityLabel } from '../../core/labels';
+import { CRITICALITIES, apiErrorMessage, criticalityLabel, webStatus } from '../../core/labels';
 import { Icon } from '../../shared/components/icon/icon';
 import { Pager } from '../../shared/components/pager/pager';
 import { EmptyState } from '../../shared/components/empty-state/empty-state';
+import { AssetPeek } from '../../shared/components/asset-peek/asset-peek';
+import { SavedViews } from '../../shared/components/saved-views/saved-views';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
+// What the search box understands, with an example of each (apps/assets/query.py).
+export const QUERY_HELP: { term: string; meaning: string }[] = [
+  { term: 'tech:nginx', meaning: 'runs this software' },
+  { term: 'provider:aws', meaning: 'hosted on (provider:none = unknown)' },
+  { term: 'owner:me', meaning: 'owned by (a name, me or none)' },
+  { term: 'status:5xx', meaning: 'last web reply (2xx…5xx, none)' },
+  { term: 'port:22', meaning: 'has this port open' },
+  { term: 'severity:high+', meaning: 'has an open issue this bad or worse' },
+  { term: 'tag:payments', meaning: 'carries the label' },
+  { term: 'new:7', meaning: 'first seen in the last 7 days' },
+  { term: '-tag:legacy', meaning: 'a minus excludes' },
+];
+
 @Component({
   selector: 'app-assets',
-  imports: [PluralPipe, FormsModule, DatePipe, Pager, RouterLink, EmptyState, Icon],
+  imports: [PluralPipe, FormsModule, Pager, RouterLink, EmptyState, Icon, AssetPeek, SavedViews],
   templateUrl: './assets.html',
   styleUrl: './assets.scss',
 })
 export class Assets implements OnDestroy {
   private readonly assetService = inject(AssetService);
+  private readonly orgService = inject(OrganizationService);
   protected readonly orgContext = inject(OrganizationContextService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
@@ -35,11 +51,28 @@ export class Assets implements OnDestroy {
   readonly isLoading = signal(true);
   readonly errorMessage = signal<string | null>(null);
 
-  readonly searchTerm = signal('');
+  // The search box, in the search language; kept in the URL (?q=) so it can be linked to.
+  readonly searchTerm = signal(inject(ActivatedRoute).snapshot.queryParamMap.get('q') ?? '');
+  readonly showHelp = signal(false);
+  protected readonly queryHelp = QUERY_HELP;
+  protected readonly webStatus = webStatus;
+
+  // The host open in the side panel, and who can own hosts.
+  readonly peeking = signal<Asset | null>(null);
+  readonly members = signal<Member[]>([]);
   readonly assetTypeFilter = signal<AssetType | ''>('');
   readonly criticalityFilter = signal<Criticality | ''>('');
   // From a label link (?tag=payments).
   readonly tagFilter = computed(() => this.queryParams()?.get('tag') ?? '');
+  // What a saved view stores for this page.
+  readonly currentFilters = computed(() => {
+    const filters: Record<string, string> = {};
+    if (this.searchTerm().trim()) filters['q'] = this.searchTerm().trim();
+    if (this.assetTypeFilter()) filters['asset_type'] = this.assetTypeFilter();
+    if (this.criticalityFilter()) filters['criticality'] = this.criticalityFilter();
+    if (this.tagFilter()) filters['tag'] = this.tagFilter();
+    return filters;
+  });
   protected readonly criticalities = CRITICALITIES;
   protected readonly criticalityLabel = criticalityLabel;
 
@@ -59,12 +92,18 @@ export class Assets implements OnDestroy {
     // search/type filters already triggering their own refetch --
     // this is what makes the org switcher actually affect this page.
     effect(() => {
-      this.orgContext.selectedOrganization();
+      const org = this.orgContext.selectedOrganization();
       this.tagFilter();
       untracked(() => {
         this.page.set(1);
+        this.peeking.set(null);
         this.fetchAssets();
       });
+      if (org) {
+        untracked(() =>
+          this.orgService.members(org.id).subscribe({ next: (m) => this.members.set(m), error: () => this.members.set([]) }),
+        );
+      }
     });
   }
 
@@ -80,9 +119,39 @@ export class Assets implements OnDestroy {
     this.searchTerm.set(value);
     clearTimeout(this.searchDebounceHandle);
     this.searchDebounceHandle = setTimeout(() => {
+      this.router.navigate([], { queryParams: { q: value.trim() || null }, queryParamsHandling: 'merge', replaceUrl: true });
       this.page.set(1);
       this.fetchAssets();
     }, SEARCH_DEBOUNCE_MS);
+  }
+
+  /** Adds an example term from the help to the search. */
+  addTerm(term: string): void {
+    const current = this.searchTerm().trim();
+    this.onSearchChange(current ? `${current} ${term}` : term);
+  }
+
+  applyView(filters: Record<string, string>): void {
+    this.searchTerm.set(filters['q'] ?? '');
+    this.assetTypeFilter.set((filters['asset_type'] as AssetType) ?? '');
+    this.criticalityFilter.set((filters['criticality'] as Criticality) ?? '');
+    this.router.navigate([], {
+      queryParams: { q: filters['q'] || null, tag: filters['tag'] || null },
+      queryParamsHandling: 'merge',
+    });
+    this.page.set(1);
+    this.fetchAssets();
+  }
+
+  /** Opens the side panel, unless the click was on a link or button in the row. */
+  peek(asset: Asset, event: MouseEvent): void {
+    if ((event.target as HTMLElement).closest('a, button')) return;
+    this.peeking.set(asset);
+  }
+
+  onPeekChanged(asset: Asset): void {
+    this.peeking.set(asset);
+    this.assets.update((assets) => assets.map((a) => (a.id === asset.id ? asset : a)));
   }
 
   onTypeFilterChange(value: string): void {
@@ -179,7 +248,7 @@ export class Assets implements OnDestroy {
     this.assetService
       .list({
         organization: org.id,
-        search: this.searchTerm() || undefined,
+        q: this.searchTerm().trim() || undefined,
         asset_type: this.assetTypeFilter() || undefined,
         criticality: this.criticalityFilter() || undefined,
         tag: this.tagFilter() || undefined,
