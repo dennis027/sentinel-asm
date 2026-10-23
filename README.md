@@ -477,6 +477,32 @@ detections and error groups are kept. Set `ASM_LOG_INGEST_URL` to the address se
 Events are stored in Postgres, which suits tens of servers and apps; for much larger volumes a dedicated
 log store would be the next step.
 
+## User accounts
+
+People join through **invitations**: an admin enters an email address and a role under
+*Organization → Members*, and the person gets a link (also shown to the admin, once, to copy — so it
+works before email is set up). The link expires after 7 days, works once, and can be resent (a new
+link; the old one stops working) or cancelled.
+
+- **No account yet:** they create one from the link. Their email address is their username, and the
+  link proves they received it.
+- **Already have an account:** they sign in first and accept. Joining always needs the invited person:
+  a link opened while signed in as someone else is refused.
+- Admins invite up to Admin; only an Owner can invite an Owner. Roles can be changed and members removed
+  as before; an organization always keeps at least one Owner.
+
+**Signing in** works with a username or an email address (unless two accounts share the address).
+**Forgot your password?** on the sign-in page emails a link that expires in an hour and works once; the
+page answers the same whether or not the address has an account. A reset, like a password change, signs
+out every device and emails a notice; two-factor sign-in still applies.
+
+*Account settings* also has the profile (name), changing the email address (needs the current
+password; the old address is told), and **sign out on every device**. Every one of these is in the
+account's sign-in history.
+
+Set `FRONTEND_URL` (the web app's address) so emailed links point to the right place, and the SMTP
+settings for password-reset emails.
+
 ## Account security and integrations
 
 - **Two-factor sign-in.** Each person can turn on authenticator-app codes
@@ -518,6 +544,18 @@ Known gaps: the public-target check runs once before the scanner starts,
 so it does not stop a host that redirects to an internal address
 mid-scan; and `root_domain` is unique across the whole instance, so the
 first organization to claim a domain holds it even if unverified.
+
+## Protections
+
+- **Rate limits** on every API endpoint: per signed-in user (`API_RATE_USER`, 1200/min) and per address
+  without one (`API_RATE_ANON`, 120/min); tighter on sign-in (5/min), password resets (5/hour) and
+  invitation links (30/hour). Log ingest has its own per-source limit.
+- **Content-Security-Policy** on production builds: no inline scripts, and the page may only talk to
+  itself and the API.
+- **Dependencies:** CI fails on a known vulnerability in the Python packages or the Angular app's runtime
+  packages (`pip-audit`, `npm audit`); Dependabot opens weekly update pull requests.
+- **Browser errors** in the web app are reported to `/api/client-errors/` and logged like backend errors.
+- **Scan history** older than `ASM_SCAN_JOB_RETENTION_DAYS` (90) is deleted nightly; findings are kept.
 
 ## Tests and linting
 

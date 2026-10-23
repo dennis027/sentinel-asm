@@ -154,6 +154,9 @@ envVarGroups:
         sync: false
       - key: S3_REGION
         value: auto
+      # The web app's address, for links in invitation and password-reset emails.
+      - key: FRONTEND_URL
+        sync: false
       # Where servers and apps send logs, e.g. https://densight.onrender.com/api/ingest/
       - key: ASM_LOG_INGEST_URL
         sync: false

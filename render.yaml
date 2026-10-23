@@ -104,6 +104,19 @@ services:
         value: "true"
       - key: ASM_LOG_INGEST_URL
         sync: false
+      # The web app (GitHub Pages): links in invitation and password-reset emails.
+      - key: FRONTEND_URL
+        value: https://dennis027.github.io/sentinel-asm
+      # Email, for password resets (and alerts). Without it, invitations still
+      # work: the admin copies the link shown after inviting.
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
 
   - type: keyvalue
     name: densight-redis
