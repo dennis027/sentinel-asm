@@ -22,8 +22,9 @@ what to say, and honest answers to the questions people usually ask.
 3. Open the app, sign in, and pick **Acme Retail** in the organization switcher.
 4. Choose light or dark mode at the bottom of the sidebar, whichever suits the room.
 5. Optional: have a domain you own already added and verified if you want
-   to show a live scan. **Don't press Run scan on Acme Retail** — its
-   domain doesn't exist, so live scans of it just fail.
+   to show a live scan. **Don't run scans on Acme Retail**: its domain
+   doesn't exist, so scanners skip every host, and the ones that only
+   read DNS would mark the demo's findings as resolved.
 
 ## The one-sentence pitch
 
@@ -63,6 +64,9 @@ first); the second half is how the team works with it.
 | 10 | **Findings** | Tick three rows; show the bulk bar. Then filter **Came back after a fix**. | "Triage in bulk. And this one, the Postgres port, was closed in September and came back when a server was rebuilt. Fixes that don't stick get flagged." |
 | 11 | **Assets** → *shop* | Show **Crown jewel**, the labels, and **Re-check this host** (don't press it on the demo). | "The scanner can't know what matters to the business; you tell it once. After a fix, one button re-checks the host to prove it." |
 | 12 | **Inventory** → Software, Open services, Certificates | Type `apache` in Software; open Certificates. | "The morning a new vulnerability is announced, the question is 'where do we run that?'. Here's the answer, and every certificate by expiry date." |
+| 12a | **Assets** | Type `provider:none` in the search, then click the *checkout* row. | "Every host with how it answers, who hosts it and who owns it. This search is everything still on our own servers. One click on a row gives the essentials without leaving the list; new issues on this host go straight to Amina, its owner." |
+| 12b | **Changes** | Point at the cards, then the list. | "What's different since last month: two hosts nobody asked for appeared last week, Grafana turned up on Thursday, the mail record moved. An attacker watches for exactly this." |
+| 12c | **Policies** | Read the three rules; click *1 host breaks it*. | "Your own rules, in your words: no Remote Desktop on the internet, no databases, no dev servers in public. Break one and it's a finding, with what to do, assigned to the host's owner." |
 | 13 | **Findings** → *Lookalike domain registered: acmeretail.example* | Show the description. | "Someone registered our name without the hyphen and set it up for email. That's how invoice fraud starts." |
 | 14 | **Compliance** → **MITRE ATT&CK** card | Click it; **View issues** on T1190. | "The same issues seen by auditors (OWASP, CIS, ISO, PCI) and by attackers (ATT&CK)." |
 | 15 | **Organization** | Scroll to **Fix-by deadlines** and **Never scan**. | "Your policy, not ours: how fast each severity must be fixed. And the hosts run by suppliers, which we must not test, are never scanned." |
@@ -73,7 +77,7 @@ first); the second half is how the team works with it.
 | 17d | **Findings** | Open *Stripe secret key in public JavaScript*, then *Public Amazon S3 bucket: acme-retail-backups*. | "Two of the most common ways companies leak: a live payment key shipped in the website's JavaScript, and a backup bucket anyone can list. Both found from the outside, the way an attacker would." |
 | 18 | **Alerts & reports** | Read the two tiles at the top; press **Add an alert** and show the three questions and the sentence at the bottom; then **Send test** on the Slack alert. | "Two things: an alert the moment a scan finds something new (once, not every day), and a one-page report every Monday for people who never log in. Setting one up is three questions, and it tells you how many alerts it would have sent last month." |
 | 19 | Anywhere | Press **Ctrl+K**, type `cert`. Then press **?**. | "Anything (a host, an issue, a page) in two keystrokes, and shortcuts for people who live in the tool." |
-| 20 | **Scanners** *(own domain only)* | **Run all scanners**. | "Twenty-five checks, from leaked keys in JavaScript and exposed admin panels and certificate logs to lookalike domains, across every host, then daily by themselves." |
+| 20 | **Scanners** *(own domain only)* | **Run all scanners**; read the check that opens before anything starts. | "Before it starts it tells you what it will cover, which hosts are gone and how long it will take. Then twenty-five checks, from leaked keys in JavaScript and exposed admin panels and certificate logs to lookalike domains, across every host, then daily by themselves." |
 
 ## Questions you'll probably get
 
