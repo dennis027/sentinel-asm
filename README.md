@@ -170,9 +170,7 @@ screen is shown in both. The data is the fictional demo organization (see [Demo 
   </tr>
 </table>
 
-<details>
-<summary><b>More screens</b> (16 more, light and dark)</summary>
-<br>
+### More screens
 
 <table>
   <tr>
@@ -293,7 +291,6 @@ screen is shown in both. The data is the fictional demo organization (see [Demo 
   </tr>
 </table>
 
-</details>
 
 ## Quick start
 
