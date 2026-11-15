@@ -117,11 +117,17 @@ class MembershipSerializer(serializers.ModelSerializer):
     email = serializers.CharField(source="user.email", read_only=True)
     # The account's id, which is what findings are assigned to.
     user_id = serializers.IntegerField(source="user.id", read_only=True)
+    # Full name when the account has one, otherwise the username.
+    name = serializers.SerializerMethodField()
 
     class Meta:
         model = Membership
-        fields = ["id", "user_id", "username", "email", "role", "created_at"]
+        fields = ["id", "user_id", "username", "name", "email", "role", "created_at"]
         read_only_fields = fields
+
+
+    def get_name(self, obj) -> str:
+        return obj.user.get_full_name() or obj.user.username
 
 
 class UpdateMemberSerializer(serializers.Serializer):

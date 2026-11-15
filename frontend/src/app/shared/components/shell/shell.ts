@@ -1,6 +1,8 @@
 import { LogoMark } from '../logo-mark/logo-mark';
-import { Component, OnInit, effect, inject, signal, untracked } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Component, ElementRef, OnInit, effect, inject, signal, untracked } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { filter } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
 import { OrganizationContextService } from '../../../core/services/organization-context-service';
 import { FormsModule } from '@angular/forms';
@@ -40,6 +42,7 @@ export class Shell implements OnInit {
   protected readonly theme = inject(ThemeService);
   protected readonly search = inject(SearchService);
   private readonly router = inject(Router);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly findingService = inject(FindingService);
 
   // Open issues assigned to the signed-in person in this organization.
@@ -54,6 +57,14 @@ export class Shell implements OnInit {
   ];
 
   constructor() {
+    // On a short screen the links scroll: keep the current page's link in view.
+    // (Also once the organization switcher has appeared above the links and pushed them down.)
+    const revealActiveLink = () =>
+      setTimeout(() => this.host.nativeElement.querySelector('.nav-link.active')?.scrollIntoView?.({ block: 'nearest' }));
+    this.router.events
+      .pipe(filter((event) => event instanceof NavigationEnd), takeUntilDestroyed())
+      .subscribe(revealActiveLink);
+
     // A user with no organization can't do anything on the data pages,
     // so send them to the one place that fixes that.
     effect(() => {
@@ -69,6 +80,7 @@ export class Shell implements OnInit {
       untracked(() => {
         this.myWorkCount.set(0);
         if (!org) return;
+        revealActiveLink();
         this.findingService
           .list({ organization: org.id, assignee: 'me', is_active: true, triaged: false, kind: 'issue', page_size: 1 })
           .subscribe({ next: (page) => this.myWorkCount.set(page.count), error: () => undefined });

@@ -11,14 +11,8 @@
   padding: var(--space-4) var(--space-3);
   background: var(--sidebar-bg);
   color: var(--sidebar-text);
-  overflow-y: auto;
-  overflow-x: hidden;
-  // A thin scrollbar that only shows while the pointer is over the sidebar.
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
+  overflow: hidden;
   transition: width 0.16s ease;
-
-  &:hover { scrollbar-color: var(--sidebar-border) transparent; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -99,10 +93,21 @@
   }
 }
 
+// The links scroll on a short screen; the brand above and the footer below stay put.
 nav {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding-bottom: var(--space-3);
+  overflow-y: auto;
+  overflow-x: hidden;
+  // A thin scrollbar that only shows while the pointer is over the sidebar.
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+
+  .sidebar:hover & { scrollbar-color: var(--sidebar-border) transparent; }
 }
 
 .nav-group {
@@ -143,16 +148,11 @@ nav {
   }
 }
 
-// Pinned to the bottom of the sidebar, so the theme switch and sign out
-// stay in reach on a short screen while the links above scroll.
+// Below the links: the theme switch and sign out, always in reach.
 .footer {
-  position: sticky;
-  bottom: calc(-1 * var(--space-4));
-  margin-top: auto;
-  margin-bottom: calc(-1 * var(--space-4));
-  padding: var(--space-3) 0 var(--space-4);
+  flex-shrink: 0;
+  padding-top: var(--space-3);
   border-top: 1px solid var(--sidebar-border);
-  background: var(--sidebar-bg);
 }
 
 // Light / system / dark switch.
@@ -325,16 +325,17 @@ nav {
 
   nav {
     order: 3;
+    flex: none;
     width: 100%;
     flex-direction: row;
+    padding-bottom: 0;
     overflow-x: auto;
+    overflow-y: hidden;
   }
 
   .nav-link { flex-shrink: 0; }
 
   .footer {
-    position: static;
-    margin: 0;
     padding: 0;
     border: none;
     display: flex;

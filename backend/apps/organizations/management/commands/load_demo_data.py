@@ -913,6 +913,18 @@ class Command(BaseCommand):
             Asset.objects.filter(id=assets[host].id).update(
                 hosting={"ips": ["203.0.113.30"], "cnames": [], "reverse_names": [], "checked_at": checked}
             )
+        # Inventory is as old as its host, so the change feed shows only what changed lately.
+        for asset in assets.values():
+            since = Asset.objects.values_list("first_seen", flat=True).get(id=asset.id)
+            Technology.objects.filter(asset=asset).update(first_seen=since)
+            Finding.objects.filter(
+                asset=asset, finding_type__in=[T.DNS_CHANGE, T.CERT_ISSUED], first_seen__gte=now,
+            ).update(first_seen=since)
+            Finding.objects.filter(asset=asset, finding_type=T.OPEN_PORT, raw_data__port="443").update(first_seen=since)
+        # The mail record moved last week.
+        Finding.objects.filter(
+            asset=assets[""], finding_type=T.DNS_CHANGE, raw_data__record_type="MX",
+        ).update(first_seen=now - timedelta(days=6))
         # Software that turned up recently, for the change feed.
         Technology.objects.filter(asset=assets["grafana"]).update(first_seen=now - timedelta(days=3))
         Technology.objects.filter(asset=assets["staging"]).update(first_seen=now - timedelta(days=9))

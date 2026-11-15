@@ -43,7 +43,7 @@
       <select aria-label="Owner" [ngModel]="a.owner ?? ''" (ngModelChange)="setOwner($event)">
         <option value="">Nobody</option>
         @for (m of members(); track m.user_id) {
-          <option [value]="m.user_id">{{ m.username }}</option>
+          <option [value]="m.user_id">{{ m.name || m.username }}</option>
         }
       </select>
       <p class="hint">New issues found on this host are assigned to its owner.</p>

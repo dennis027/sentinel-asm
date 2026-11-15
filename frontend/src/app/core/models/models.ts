@@ -77,6 +77,8 @@ export interface Member {
   // The account's id -- what a finding is assigned to.
   user_id: number;
   username: string;
+  // Full name when the account has one, otherwise the username.
+  name?: string;
   email: string;
   role: OrgRole;
   created_at: string;

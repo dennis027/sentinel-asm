@@ -17,6 +17,17 @@ const KIND_ICONS: Record<SurfaceChangeKind, IconName> = {
   dns_changed: 'network',
 };
 
+// Under a count the label is plural ("6 new hosts"); each event keeps the API's singular.
+const COUNT_LABELS: Record<SurfaceChangeKind, string> = {
+  host_added: 'New hosts',
+  host_gone: 'Hosts gone',
+  port_opened: 'Ports opened',
+  port_closed: 'Ports closed',
+  software_seen: 'New software',
+  certificate: 'New certificates',
+  dns_changed: 'DNS changes',
+};
+
 // Changes that widen what an attacker can reach, as opposed to narrowing it.
 const EXPOSING: SurfaceChangeKind[] = ['host_added', 'port_opened', 'software_seen'];
 
@@ -49,7 +60,7 @@ export class Changes {
     if (!data) return [];
     return (Object.keys(data.kinds) as SurfaceChangeKind[]).map((kind) => ({
       kind,
-      label: data.kinds[kind],
+      label: COUNT_LABELS[kind] ?? data.kinds[kind],
       count: data.counts[kind],
       icon: KIND_ICONS[kind],
       exposing: EXPOSING.includes(kind),

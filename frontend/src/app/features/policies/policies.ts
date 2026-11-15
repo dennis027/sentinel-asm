@@ -54,7 +54,7 @@ export class Policies {
   readonly breakingTotal = computed(() => this.policies().reduce((sum, p) => sum + (p.enabled ? p.breaking : 0), 0));
   // Examples not already added.
   readonly suggestions = computed(() =>
-    POLICY_EXAMPLES.filter((e) => !this.policies().some((p) => p.kind === e.kind && p.value === e.value)),
+    POLICY_EXAMPLES.filter((e) => !this.policies().some((p) => p.name === e.name || (p.kind === e.kind && p.value === e.value))),
   );
 
   constructor() {
